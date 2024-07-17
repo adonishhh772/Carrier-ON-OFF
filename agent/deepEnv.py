@@ -78,8 +78,8 @@ class CarrierEnv(Env):
         reward = self.calculate_reward(energy_efficiency)
         done = np.all(self.calculate_done())
         
-        if not done and count > 300:
-            done = True
+        # if not done and count > 300:
+        #     done = True
 
         self.state = self.get_observation_state()
 
