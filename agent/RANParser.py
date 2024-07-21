@@ -34,18 +34,18 @@ class RANParser(argparse.ArgumentParser):
 
 
         self.add_argument('--total_user', type=int,default=20,help="The fixed number of user associated in the whole network")
-        self.add_argument('--min_distance', type=int,default=30,help="Minimum distance for handover intilisation")
-        self.add_argument('--max_distance', type=int,default=100,help="Maximum distance for handover intilisation")
+        self.add_argument('--min_distance', type=int,default=5,help="Minimum distance for handover intilisation")
+        self.add_argument('--max_distance', type=int,default=20,help="Maximum distance for handover intilisation")
         # self.add_argument('--distance',type=float,default=23.6,help='distance between UE i and SBS c at time t')
 
         # self.add_argument('--beta_t',type=float,default=1.0,help='A scaling factor specific to the scenario, possibly including system losses or gains.')
-        self.add_argument('--tx_gain',type=float,default=15.0,help='Transmit antenna gain.')
-        self.add_argument('--rx_gain',type=float,default=12.0,help='Transmit antenna gain.')
-        self.add_argument('--wavelength',type=float,default=2.0,help='Wavelength of the signal.')
+        self.add_argument('--tx_gain',type=float,default=12.0,help='Transmit antenna gain.')
+        self.add_argument('--rx_gain',type=float,default=10.0,help='Received antenna gain.')
+        self.add_argument('--wavelength',type=float,default=0.05,help='Wavelength of the signal.')
 
         # self.add_argument('--interference',type=float,default=0.3,help='Interference level: 0.3 is 30%.')
-        self.add_argument('--path_loss',type=float,default=0.3,help='Path-loss exponent.')
-        self.add_argument('--diameter',type=float,default=2.0,help='Diameter of the antenna.')
+        self.add_argument('--path_loss',type=float,default=2.5,help='Path-loss exponent.')
+        self.add_argument('--diameter',type=float,default=0.5,help='Diameter of the antenna.')
 
 
         self.add_argument('--num_sbs',type=int,default=2,help='the number of SBS')
@@ -53,12 +53,12 @@ class RANParser(argparse.ArgumentParser):
 
         self.add_argument('--num_usr', type=int, default=5, help='number of usr associated per cell')
 
-        self.add_argument('--noise_power',type=float,default=-174,help='The noise power in dBm')
+        self.add_argument('--noise_power',type=float,default=-100,help='The noise power in dBm')
 
         self.add_argument('--power_sleep', type=float, default=10, help='Power of BS in sleep mode Watts')
         self.add_argument('--power_active', type=float, default=50, help='Power of BS in active mode Watts')
-        self.add_argument('--max_transm_power',type=float,default=33,help='Maximum transmission power in dbm')
-        self.add_argument('--min_transm_power',type=float,default=11,help='Maximum transmission power in dBm')
+        self.add_argument('--max_transm_power',type=float,default=35,help='Maximum transmission power in dbm')
+        self.add_argument('--min_transm_power',type=float,default=32,help='Maximum transmission power in dBm')
 
         self.add_argument('--max_power',type=float,default=100,help='Maximum power of bS')
         self.add_argument('--min_power',type=float,default=20,help='Minimum power of BS')
@@ -68,7 +68,7 @@ class RANParser(argparse.ArgumentParser):
         self.add_argument('--max_datarate', type=float, default=20, help='the minimum data rate required in mb')
 
         # self.add_argument('--tm', type=float, default=1, help='tm SINR Gap')
-        self.add_argument('--min_sinr', type=float, default=0.9, help='Minimum SINR')
+        self.add_argument('--min_sinr', type=float, default=0.3, help='Minimum SINR')
         self.add_argument('--max_sinr', type=float, default=20, help='MAximum SINR')
       
 
