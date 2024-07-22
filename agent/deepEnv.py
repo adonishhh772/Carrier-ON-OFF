@@ -11,8 +11,8 @@ class CarrierEnv(Env):
         self.parser = RANParser()
         self.config = self.parser.parse_args()
         self.beta_t = 1
-        self.gTx = self.dbi_to_linear(self.config.tx_gain)
-        self.gRx = self.dbi_to_linear(self.config.rx_gain)
+        self.gTx = self.config.tx_gain
+        self.gRx = self.config.rx_gain
 
         #look into the distribution of random arrays
         self.wavelength = self.config.wavelength
@@ -29,12 +29,15 @@ class CarrierEnv(Env):
         self.beta = 1
         # self.distance = self.randomize_distances()
 
-        self.max_trnsm_power = self.dbm_to_linear(self.config.max_transm_power)
-        self.min_trnsm_power = self.dbm_to_linear(self.config.min_transm_power)
+        self.max_trnsm_power = self.config.max_transm_power
+        self.min_trnsm_power = self.config.min_transm_power
         self.min_distance = self.config.min_distance
         self.max_distance = self.config.max_distance
-        self.noise_power = self.dbm_to_linear(self.config.noise_power)
+        self.noise_power = self.config.noise_power
         self.B = self.config.band
+        self.max_sinr = []
+        self.max_datarate = []
+        self.ALL_POWER = []
 
         self.d0 = self.generate_far_field_distance()
 
@@ -63,7 +66,7 @@ class CarrierEnv(Env):
         
 
         
-    def step(self, action,count= 10):
+    def step(self, action,count):
         # Handle action (0: no handover, 1: handover)
         if action == 1:
             # handover_successful = self.handover_users()
@@ -77,6 +80,15 @@ class CarrierEnv(Env):
         energy_efficiency = total_data_rate_mb / total_power
         reward = self.calculate_reward(energy_efficiency)
         done = np.all(self.calculate_done())
+       
+        if done:
+            self.plot_max('SINR')
+            self.plot_max('Data')
+            self.plot_max('Power')
+        # else:
+        #     if count > 300:
+        #         done = True
+           
         
         # if not done and count > 300:
         #     done = True
@@ -93,6 +105,18 @@ class CarrierEnv(Env):
         
         # Return step information
         # return self.state, reward, done, info
+
+    def plot_max(self,plot_type):
+        if plot_type == 'SINR':
+            plot_name = 'MAX SINR'
+            self.save_plot(self.max_sinr,' SINR (db)',plot_name)
+        if plot_type == 'Data':
+            plot_name = 'MAX DATARATE'
+            self.save_plot(self.max_datarate,' Data Rate (mb)',plot_name)
+        if plot_type == 'Power':
+            plot_name = 'Power Consumption'
+            self.save_plot(self.ALL_POWER,'Power Consumption',plot_name)
+
 
     def render(self):
         # Implement viz
@@ -155,22 +179,18 @@ class CarrierEnv(Env):
         transmission_powers = []
         for cell_index in range(self.num_sbs):
             num_ue_in_cell = np.sum(self.user_associations == cell_index)
-            transmission_powers.append(np.random.uniform(low=self.min_trnsm_power, high=self.min_trnsm_power, size=num_ue_in_cell))
+            transmission_powers.append(np.random.uniform(low=self.min_trnsm_power, high=self.max_trnsm_power, size=num_ue_in_cell))
         return transmission_powers
-
-        # transmission_powers = []
-        # for num_ue in range(self.num_ue):
-        #     transmission_powers.append(np.random.uniform(low=self.min_trnsm_power, high=self.max_trnsm_power, size=num_ue))
-        # return transmission_powers
-    
         
 
     def calculate_channel_gain(self):
         gains = []
         for cell_index in range(self.num_sbs):
+            gTx_linear = 10 ** (self.gTx / 10)       # Convert dB to linear scale if necessary
+            gRx_linear = 10 ** (self.gRx / 10)
             ue_indices = np.where(self.user_associations == cell_index)[0]
             distances = self.distances[ue_indices, cell_index]
-            numerator = self.beta_t * self.gTx * self.gRx * (self.wavelength ** 2)
+            numerator = self.beta_t * gTx_linear * gRx_linear * (self.wavelength ** 2)
             denominator = 16 * (math.pi ** 2) * ((distances / self.d0) ** self.path_loss_exponent)
             gains.append(numerator / denominator)
 
@@ -198,46 +218,35 @@ class CarrierEnv(Env):
             ue_alpha = np.ones((num_ue_in_cell, 1), dtype=int)
             alpha.append(ue_alpha)
         return alpha
-    
-    # this is the round robin to assign the channel to the ue's
-    # def allocate_channels_round_robin(self):
-    #     alpha = []
-    #     for i, num_ue in enumerate(self.num_ue):
-    #         ue_alpha = np.zeros((num_ue, self.num_chnl), dtype=int)
-    #         for j in range(num_ue):
-    #             r = j % self.num_chnl
-    #             ue_alpha[j, r] = 1
-    #         alpha.append(ue_alpha)
-    #     return alpha
 
     # the r is the channel resource allocation which is not used as we are considering the ue are allocated in the same channel
     def calculate_sinr(self,c,u):
-        numerator = self.beta * self.p[c][u] * self.g[c][u]
-       
-        interference = 0.0
-        for i in range(self.num_sbs):
-            if i != c:
-                interfering_ue_indices = np.where(self.user_associations == i)[0]
-                for j in interfering_ue_indices:
-                    if self.alpha[i][j % len(self.alpha[i]), 0] == 1:
-                        interference += self.beta * self.p[i][j % len(self.alpha[i])] * self.g[i][j % len(self.alpha[i])]
+         # Convert power levels from dBm to linear scale (mW)
+        p_c_u_linear = 10 ** (self.p[c][u] / 10)
+        g_c_u_linear = self.g[c][u]
         
-
+        # Calculate the desired signal power (in mW)
+        numerator = self.beta * p_c_u_linear * g_c_u_linear
+        
+        interference = 0.0
         # for i in range(self.num_sbs):
         #     if i != c:
-        #         for j in range(len(self.alpha[i])):
-        #              if self.alpha[i][j, 0] == 1:
-        #                 # interference += self.beta * self.alpha[i][j, r] * self.p[i][j] * self.g[i][j]
-        #                 # this is because of static channel associtaion in the same channel
-        #                 interference += self.beta * self.alpha[i][j, 0] * self.p[i][j] * self.g[i][j]
+        #         interfering_ue_indices = np.where(self.user_associations == i)[0]
+        #         for j in interfering_ue_indices:
+        #             if self.alpha[i][j % len(self.alpha[i]), 0] == 1:
+        #                 p_i_j_linear = 10 ** (self.p[i][j % len(self.alpha[i])] / 10)
+        #                 g_i_j_linear = self.g[i][j % len(self.alpha[i])]
+        #                 interference += self.beta * p_i_j_linear * g_i_j_linear
 
+        # Convert noise power from dBm to linear scale (mW)
+        noise_power_linear = 10 ** (self.noise_power / 10)
         
-        denominator = interference + self.noise_power
+        # Calculate the denominator (interference + noise, in mW)
+        denominator = interference + noise_power_linear
         sinr = numerator / denominator
-        sinr = max(sinr, 0)
-        #USE RAN Parser min and max for this one
-        # sinr = np.clip(sinr, 0, 20)
-        return sinr
+        # Optionally convert SINR to dB for better interpretability
+        sinr_db =  np.log10(sinr)
+        return sinr_db
 
 
     def calculate_data_rate(self):
@@ -331,11 +340,23 @@ class CarrierEnv(Env):
         """
         done = np.zeros(self.num_sbs, dtype=bool)
         for i in range(self.num_sbs):
-            # this is when we have more than one channels and need to do dymanic channel allocation
-            # sinr = np.mean([self.calculate_sinr(i, u, r) for u in range(len(self.alpha[i])) for r in range(self.num_chnl) if self.alpha[i][u, r] == 1])
-            sinr = np.mean([self.calculate_sinr(i, u) for u in range(len(self.alpha[i])) if self.alpha[i][u, 0] == 1])
-            done[i] = self.check_qos(sinr)
+            # Get the indices of users associated with the current SBS
+            associated_users = np.where(self.user_associations == i)[0]
+    
+            # Calculate SINR for associated users
+            if len(associated_users) != 0:
+                sinr_values = [self.calculate_sinr(i, u) for u in range(0,len(associated_users))]
+                if len(sinr_values) != 0:
+                    # Calculate the average SINR for the current SBS
+                    sinr = np.mean(sinr_values)
+                    
+                    # Check if the QoS requirement is met
+                    done[i] = self.check_qos(sinr)
+            else:
+                done[i] = True
         return done
+
+
     
     def check_qos(self, sinr):
         """
@@ -381,52 +402,32 @@ class CarrierEnv(Env):
     def get_observation_state(self):
         num_active_users = [np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)]
         num_active_users_flat = np.array(num_active_users).flatten()
-       
+        print('Num USer')
+        print(num_active_users_flat)
         self.g = self.calculate_channel_gain()
         self.p = self.calculate_transmission_power()
         data_rate,sinr, _ = self.calculate_data_rate()
         data_rate_mb = self.convert_datarate(data_rate)
-        sinr_dbm = []
-        for sinrs in sinr:
-            sinr_dbm.append(self.linear_to_db(sinrs))
         flattened_data = np.concatenate([array.flatten() for array in data_rate_mb])
         data_rate_flattened = flattened_data
         sinr_values = np.concatenate([array.flatten() for array in sinr])
-        print('SINR')
-        print(self.distances)
-        self.save_plot(sinr_values,data_rate_flattened,'Data Rate(Mb)',' SINR (db)','SINR VS DATA RATE')
-
         _, _, total_power = self.calculate_total_power()
+        self.max_sinr.append(np.max(sinr_values,axis=0))
+        self.max_datarate.append(np.max(data_rate_flattened,axis=0))
+        self.ALL_POWER.append(total_power)
+        # print(sinr_values)
+        # print(data_rate_flattened)
+        # self.save_plot(sinr_values,data_rate_flattened,'Data Rate(Mb)',' SINR (db)','SINR VS DATA RATE')
         state =  np.concatenate((num_active_users_flat, data_rate_flattened, sinr_values, [total_power]))
         return state
     
-    def save_plot(self,x,y,label_x,label_y,plot_name):
-        plt.xlabel(label_x, fontsize=22)
-        plt.ylabel(label_y, fontsize=22)
-        plt.plot(x, y, c='black')
+    def save_plot(self, x, label_x, plot_name):
+        plt.figure(figsize=(10, 6))
+        # plt.xlabel(label_x, fontsize=22)
+        plt.ylabel(label_x, fontsize=22)
+        plt.plot(np.arange(len(x)), x)
+        plt.grid(True)
+        plt.title('SINR')
         plot_name = plot_name + '.png'
         plt.savefig(plot_name)
 
-    @staticmethod
-    def linear_to_db(value):
-        return 10 * np.log10(value)
-
-    @staticmethod
-    def linear_to_dbm(value):
-        return 10 * np.log10(value) + 30
-
-    @staticmethod
-    def db_to_linear(value):
-        return 10 ** (value / 10)
-
-    @staticmethod
-    def dbm_to_linear(value):
-        return 10 ** ((value - 30) / 10)
-    
-    @staticmethod
-    def dbi_to_linear(value):
-        return 10 ** (value / 10)
-
-    @staticmethod
-    def linear_to_dbi(value):
-        return 10 * np.log10(value)

@@ -57,7 +57,13 @@ class Memory(object):
 
     def sample(self, batch_size):
         n = len(self.is_done)
+        # if batch_size > n:
+        #     batch_size = n - 1
+
+        # print('BAtch size')
+        # print(batch_size)
         idx = random.sample(range(0, n-1), batch_size)
+      
 
         return torch.Tensor(self.state)[idx].to(device), torch.LongTensor(self.action)[idx].to(device), \
                torch.Tensor(self.state)[1+np.array(idx)].to(device), torch.Tensor(self.rewards)[idx].to(device), \

@@ -35,7 +35,7 @@ class RANParser(argparse.ArgumentParser):
 
         self.add_argument('--total_user', type=int,default=20,help="The fixed number of user associated in the whole network")
         self.add_argument('--min_distance', type=int,default=5,help="Minimum distance for handover intilisation")
-        self.add_argument('--max_distance', type=int,default=20,help="Maximum distance for handover intilisation")
+        self.add_argument('--max_distance', type=int,default=30,help="Maximum distance for handover intilisation")
         # self.add_argument('--distance',type=float,default=23.6,help='distance between UE i and SBS c at time t')
 
         # self.add_argument('--beta_t',type=float,default=1.0,help='A scaling factor specific to the scenario, possibly including system losses or gains.')
@@ -44,8 +44,8 @@ class RANParser(argparse.ArgumentParser):
         self.add_argument('--wavelength',type=float,default=0.05,help='Wavelength of the signal.')
 
         # self.add_argument('--interference',type=float,default=0.3,help='Interference level: 0.3 is 30%.')
-        self.add_argument('--path_loss',type=float,default=2.5,help='Path-loss exponent.')
-        self.add_argument('--diameter',type=float,default=0.5,help='Diameter of the antenna.')
+        self.add_argument('--path_loss',type=float,default=2,help='Path-loss exponent.')
+        self.add_argument('--diameter',type=float,default=1.2,help='Diameter of the antenna.')
 
 
         self.add_argument('--num_sbs',type=int,default=2,help='the number of SBS')
@@ -58,7 +58,7 @@ class RANParser(argparse.ArgumentParser):
         self.add_argument('--power_sleep', type=float, default=10, help='Power of BS in sleep mode Watts')
         self.add_argument('--power_active', type=float, default=50, help='Power of BS in active mode Watts')
         self.add_argument('--max_transm_power',type=float,default=35,help='Maximum transmission power in dbm')
-        self.add_argument('--min_transm_power',type=float,default=32,help='Maximum transmission power in dBm')
+        self.add_argument('--min_transm_power',type=float,default=11,help='Maximum transmission power in dBm')
 
         self.add_argument('--max_power',type=float,default=100,help='Maximum power of bS')
         self.add_argument('--min_power',type=float,default=20,help='Minimum power of BS')
