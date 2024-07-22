@@ -22,7 +22,8 @@ class CarrierEnv(Env):
         self.num_time_slots = 1
         self.min_sinr_threshold = self.config.min_sinr
         self.max_ue_per_sbs = self.config.max_num_usr
-        
+        self.sbs_state = np.ones(self.num_sbs)
+
         self.distance = self.randomize_distances()
         self.beta = 1
         
@@ -35,8 +36,7 @@ class CarrierEnv(Env):
         self.B = self.config.band
         self.state = self.get_observation_state()
         self.action_space = Discrete(2)
-        self.sbs_state = np.ones(self.num_sbs)
-
+       
         
     def step(self, action,count= 10):
         # Handle action (0: no handover, 1: handover)
@@ -50,10 +50,10 @@ class CarrierEnv(Env):
         active_power, sleep_power, total_power = self.calculate_total_power()
         
         energy_efficiency = total_data_rate_mb / total_power
-        reward = self.calculate_reward(total_data_rate_mb, total_power)
+        reward = self.calculate_reward(energy_efficiency)
         done = np.all(self.calculate_done())
         
-        if not done and count > 300:
+        if not done and count > 10:
             done = True
 
         self.state = self.get_observation_state()
@@ -260,13 +260,13 @@ class CarrierEnv(Env):
     def check_constraints(self):
         Xj = np.zeros(sum(self.num_ue), dtype=int)
         Xk = np.zeros(self.num_sbs, dtype=int)
-        
+        print(self.num_ue)
         data_rate, _ = self.calculate_data_rate()
         for sbs in range(self.num_sbs):
-            for ue in range(len(self.num_ue[sbs])):
+            for ue in range(self.num_ue[sbs]):
                 if data_rate[sbs][ue].sum() < self.config.demand_min:
                     Xj[ue] = 1
-            if len(self.num_ue[sbs]) > self.config.max_num_usr:
+            if self.num_ue[sbs] > self.config.max_num_usr:
                 Xk[sbs] = 1
 
         return Xj, Xk

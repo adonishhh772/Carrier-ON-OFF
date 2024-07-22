@@ -40,7 +40,7 @@ class RANParser(argparse.ArgumentParser):
         # self.add_argument('--d0',type=float,default=1.0,help='Far field reference distance.')
         # self.add_argument('--path_loss',type=float,default=3.0,help='Path-loss exponent.')
 
-        self.add_argument('--num_sbs',type=int,default=10,help='the number of SBS')
+        self.add_argument('--num_sbs',type=int,default=2,help='the number of SBS')
         self.add_argument('--num_channel',type=int,default=3,help='the number of channel')
 
         self.add_argument('--num_usr', type=int, default=5, help='number of usr associated per cell')

@@ -57,6 +57,7 @@ class Memory(object):
 
     def sample(self, batch_size):
         n = len(self.is_done)
+        print(n)
         idx = random.sample(range(0, n-1), batch_size)
 
         return torch.Tensor(self.state)[idx].to(device), torch.LongTensor(self.action)[idx].to(device), \
@@ -185,7 +186,7 @@ def save_plot_and_csv_test(total_rewards):
 
 
 
-def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps_min=0.01, update_step=10, batch_size=64, update_repeats=50,
+def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps_min=0.01, update_step=10, batch_size=32, update_repeats=50,
          epochs=2000, seed=42, max_memory_size=50000, lr_gamma=0.9, lr_step=100, measure_step=20,
          measure_repeats=100,l1 = 845, l2 = 1500, l3 = 700,l4 = 200, l5 = 5,  env=''):
 
@@ -216,9 +217,9 @@ def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps
     env = CarrierEnv()
     torch.manual_seed(seed)
     # env.reset()
-    l2 = 64
-    l3 = 64
-    l4 = 64
+    l2 = 32
+    l3 = 32
+    l4 = 32
     l5 = env.action_space.n
     l1 = env.state.shape[0]
 
