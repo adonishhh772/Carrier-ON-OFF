@@ -140,6 +140,8 @@ def evaluate(Qmodel, env, repeats,l1):
             with torch.no_grad():
                 values = Qmodel(_state)
             action = np.argmax(values.cpu().numpy())
+            print('Action')
+            print(action)
             state, reward, done, _ = env.step(action,cnt)
             print("Reward evaluate:",reward)
             perform += reward
@@ -191,7 +193,7 @@ def save_plot_and_csv_test(total_rewards):
 
 
 
-def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps_min=0.01, update_step=10, batch_size=64, update_repeats=50,
+def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps_min=0.01, update_step=10, batch_size=20, update_repeats=50,
          epochs=2000, seed=42, max_memory_size=50000, lr_gamma=0.9, lr_step=100, measure_step=20,
          measure_repeats=100,l1 = 845, l2 = 1500, l3 = 700,l4 = 200, l5 = 5,  env=''):
 
@@ -222,9 +224,6 @@ def ddqn_agent(gamma=0.99, lr=1e-3, min_episodes=20, eps=1, eps_decay=0.995, eps
     env = CarrierEnv()
     torch.manual_seed(seed)
     # env.reset()
-    l2 = 64
-    l3 = 64
-    l4 = 64
     l5 = env.action_space.n
     l1 = env.state.shape[0]
 

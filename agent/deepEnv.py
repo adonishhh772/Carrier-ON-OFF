@@ -57,7 +57,7 @@ class CarrierEnv(Env):
         self.alpha = self.allocate_channels()
         self.p = self.calculate_transmission_power()
 
-        self.action_space = Discrete(2)
+        self.action_space = Discrete(self.num_sbs)
         self.sbs_state = np.ones(self.num_sbs)
         self.state = self.get_observation_state()
         # print(self.state)
@@ -66,8 +66,9 @@ class CarrierEnv(Env):
         
 
         
-    def step(self, action,count):
+    def step(self, action):
         # Handle action (0: no handover, 1: handover)
+       
         if action == 1:
             # handover_successful = self.handover_users()
             # if handover_successful:
@@ -79,9 +80,9 @@ class CarrierEnv(Env):
         
         energy_efficiency = total_data_rate_mb / total_power
         reward = self.calculate_reward(energy_efficiency)
-        done = np.all(self.calculate_done())
+        done = self.calculate_done()
        
-        if done:
+        if np.all(done):
             self.plot_max('SINR')
             self.plot_max('Data')
             self.plot_max('Power')
@@ -94,6 +95,9 @@ class CarrierEnv(Env):
         #     done = True
 
         self.state = self.get_observation_state()
+
+        print('Action')
+        print(action)
 
         info = {
             'active_power': active_power,
@@ -273,7 +277,7 @@ class CarrierEnv(Env):
         sleep_power = 0
         #need to recheck this logic for total power consumption for active mode and sleep mode
         for i in range(self.num_sbs):
-            if np.sum(self.alpha[i]) > 0:
+            if self.sbs_state[i] == 1: 
                 active_power += self.sbs_state[i] * (np.sum(self.alpha[i] * self.p[i][:, np.newaxis]) + self.config.power_active)
             else:
                 sleep_power += self.config.power_sleep
@@ -396,22 +400,44 @@ class CarrierEnv(Env):
 
     def turn_off_idle_sbs(self):
         for sbs in range(self.num_sbs):
-            if np.sum(self.alpha[sbs]) == 0:
+            if np.sum(self.user_associations == sbs) == 0:
                 self.sbs_state[sbs] = 0
 
     def get_observation_state(self):
         num_active_users = [np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)]
         num_active_users_flat = np.array(num_active_users).flatten()
-        print('Num USer')
-        print(num_active_users_flat)
+
+        print('Distance between Cell and UE')
+        print(self.distances)
+
+        print('Num User')
+        print(num_active_users)
+
         self.g = self.calculate_channel_gain()
+
+        print('Channel Gain')
+        print(self.g)
         self.p = self.calculate_transmission_power()
         data_rate,sinr, _ = self.calculate_data_rate()
+
+        print('SINR')
+        print(sinr)
+
         data_rate_mb = self.convert_datarate(data_rate)
+
+        print('Data Rate(Mb)')
+        print(data_rate_mb)
+
         flattened_data = np.concatenate([array.flatten() for array in data_rate_mb])
         data_rate_flattened = flattened_data
         sinr_values = np.concatenate([array.flatten() for array in sinr])
         _, _, total_power = self.calculate_total_power()
+
+        print('Total BS power')
+        print(total_power)
+
+
+
         self.max_sinr.append(np.max(sinr_values,axis=0))
         self.max_datarate.append(np.max(data_rate_flattened,axis=0))
         self.ALL_POWER.append(total_power)
