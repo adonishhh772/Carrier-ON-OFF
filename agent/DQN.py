@@ -1,12 +1,11 @@
 import torch
 import numpy as np
-from torch import nn
+import pandas as pd
 import random
-import torch.nn.functional as F
-import collections
-from torch.optim.lr_scheduler import StepLR
 from collections import deque
+import seaborn as sns
 import copy
+from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 from numpy import savetxt
 from deepEnv import CarrierEnv
@@ -21,17 +20,19 @@ def test_model(model, env,state_flattened_size):
     state = torch.flatten(torch.from_numpy(_state.astype(np.float32))).reshape(1, state_flattened_size)
     done = False
     rewards = []
+    states_actions = []
     while not np.all(done):
         # DQN
         qval = model(state)
         qval_ = qval.data.numpy()
         action = np.argmax(qval_)
+        states_actions.append((state.cpu().numpy(), action))  # Capture state and action
         _state, reward, done, _ = env.step(action)
         state = torch.flatten(torch.from_numpy(_state.astype(np.float32))).reshape(1, state_flattened_size)
         rewards.append(reward)
         print("Request:", len(rewards), "Action:", action, "Reward:", reward)
     print("Reward sum:", sum(rewards))
-    return rewards
+    return rewards, states_actions
 
 def save_plot_and_csv_train(total_rewards):
     x = np.arange(len(total_rewards))
@@ -44,15 +45,42 @@ def save_plot_and_csv_train(total_rewards):
     savetxt('dqn_train.csv', total_rewards, delimiter=',')
 
 def save_plot_and_csv_test(total_rewards):
-    x = np.arange(len(total_rewards))
-    y = total_rewards
-    plt.xlabel("Epochs", fontsize=22)
-    plt.ylabel("Reward", fontsize=22)
-    plt.plot(x, y, c='black')
-    plt.savefig('dqn_test.png')
+    num_bs = len(total_rewards[0])
+    # Create a dictionary to store rewards for each BS
+    rewards_dict = {f'BS{i+1} Reward': [entry[i] for entry in total_rewards] for i in range(num_bs)}
+    # Add episode numbers to the dictionary
+    rewards_dict['Episode'] = range(1, len(total_rewards) + 1)
+    # Create a DataFrame for plotting
+    df = pd.DataFrame(rewards_dict)
+    # Plot the values
+    plt.figure(figsize=(12, 6))
+    for i in range(num_bs):
+        sns.lineplot(data=df, x='Episode', y=f'BS{i+1} Reward', marker='o', label=f'BS{i+1} Reward')
+
+    plt.title('Rewards for All Base Stations Over Training Episodes')
+    plt.xlabel('Training Episode')
+    plt.ylabel('Reward')
+    plt.legend()
+    plt.savefig('bs_rewards_line_plot.png')
     # save to csv file
     savetxt('dqn_test.csv', total_rewards, delimiter=',')
 
+def overall_reward_plot(data):
+    # # Create a dictionary to store rewards for each BS
+    overall_dict = {'Overall Reward': [sum(entry) for entry in data]}
+    # Add overall reward to the dictionary
+    # Add episode numbers to the dictionary
+    overall_dict['Episode'] = range(1, len(data) + 1)
+    # Create a DataFrame for plotting
+    df_overall = pd.DataFrame(overall_dict)
+    plt.figure(figsize=(12, 6))
+    sns.lineplot(data=df_overall, x='Episode', y='Overall Reward', marker='o', label='Overall Reward', linewidth=2.5)
+    plt.title('Overall Reward Over Training Episodes')
+    plt.xlabel('Training Episode')
+    plt.ylabel('Reward')
+    # plt.ylim(0, 1)
+    plt.legend()
+    plt.savefig('bs_rewards_overall_line_plot.png')
 
 def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_size = 845, epochs = 1000,mem_size = 5000,
     batch_size = 256,sync_freq = 16,l1 = 845, l2 = 1500, l3 = 700,l4 = 200, l5 = 5, env=""):
@@ -64,14 +92,10 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
     :param env_name: name of the gym environment
     :return: 
     """
-    
-
     env= CarrierEnv()
-
     state_flattened_size = env.state.shape[0]
     l5 = env.action_space.n
     l1 = env.state.shape[0]
-
     model = torch.nn.Sequential(
         torch.nn.Linear(l1, l2),
         torch.nn.ReLU(),
@@ -95,6 +119,7 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
     
     replay = deque(maxlen=mem_size)
     
+    states_actions = []
     
     for i in range(epochs):
         print("Starting training, epoch:", i)
@@ -116,7 +141,7 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
             else:
                 action_ = np.argmax(qval_)
 
-
+            states_actions.append((state1.cpu().numpy(), action_))
             state, reward, done, _ = env.step(action_)
             state2 = torch.flatten(torch.from_numpy(state.astype(np.float32))).reshape(1, state_flattened_size)
 
@@ -125,8 +150,6 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
             replay.append(exp)
             state1 = state2
 
-            print('Replay Size')
-            print(len(replay))
             if len(replay) > batch_size:
                 minibatch = random.sample(replay, batch_size)
                 state1_batch = torch.cat([s1 for (s1, a, r, s2, d) in minibatch])
@@ -137,18 +160,6 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
                 Q1 = model(state1_batch)
                 with torch.no_grad():
                     Q2 = model2(state2_batch)
-
-
-                # print(f"Q1 shape: {Q1.shape}")
-                print(f"action_batch shape: {action_batch.shape}")
-                # print(f"X shape: {X.shape}")
-                # print(f'Reward Batch:{reward_batch.shape}')
-                # print(f"Done Batch:{done_batch.shape}")
-                # print("Q2:")
-                # print( (gamma * ((1 - done_batch) * torch.max(Q2))).shape)
-                # Print shapes for debugging
-                print(f'Reward Batch shape: {reward_batch.shape}')
-                print(f"Done Batch shape: {done_batch.shape}")
 
                 # Ensure action_batch is correctly shaped
                 action_batch = action_batch.long().view(-1, 1)
@@ -179,8 +190,6 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
                 X_all = torch.cat(X_list, dim=1)
                 Y_all = torch.cat(Y_list, dim=1)
 
-                print(f"X shape: {X_all.shape}")
-                # print(X)
                 # Compute loss and backpropagate
                 loss = loss_fn(X_all, Y_all)
                 print(f"Loss: {loss.item()}")
@@ -204,15 +213,283 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
         if epsilon > 0.01:
             epsilon -= (1 / epochs)
 
-   
-    
-    #GUARDAR total_reward_list do TRAIN
+        #GUARDAR total_reward_list do TRAIN
     torch.save(model.state_dict(), 'dqn.pt')
-    print("TEST AGENT")
+
+def create_action_line_plot(action_history):
+    action_list = []
+    for i in range(len(action_history)):
+        action_list.append([i,action_history[i][0][1]])
+    # # Flatten the action history and create a DataFrame
+    # action_data = [(episode, step, action) for episode, actions in enumerate(action_history) for step, action in enumerate(actions)]
+    df = pd.DataFrame(action_list, columns=['Episode', 'Action'])
+    
+    # # Create a line plot
+    plt.figure(figsize=(12, 6))
+    sns.lineplot(data=df, x='Episode', y='Action', marker='o')
+    plt.title('Actions Taken Over Training Episodes')
+    plt.xlabel('Training Episode')
+    plt.ylabel('Action')
+    plt.savefig('action_line_plot.png')
+    # plt.show()
+
+def create_truth_table(data,rewards):
+    num_bs =len(rewards[0])
+    flattened_data = [(arr[0][:num_bs].tolist(), action) for arr, action in data]
+
+    # Convert the flattened data to a DataFrame
+    df = pd.DataFrame(flattened_data, columns=['State', 'Action'])
+    state_columns = [f'User_BS_{i+1}' for i in range(num_bs)]
+    df[state_columns] = pd.DataFrame(df['State'].tolist(), index=df.index)
+    df.drop(columns=['State'], inplace=True)
+
+    # Save the DataFrame to a CSV file
+    df.to_csv('truth_table.csv', index=False)
+
+    # Example 1: Bar Plot
+    plt.figure(figsize=(10, 6))
+    sns.countplot(data=df, x='Action')
+    plt.title('Frequency of Each Action')
+    plt.xlabel('Action')
+    plt.ylabel('Count')
+    plt.savefig('action_frequency_bar_plot.png')
+
+    # Example 2: Heatmap
+    # Creating a pivot table for heatmap
+    heatmap_data = df.pivot_table(index=state_columns[0], columns='Action', aggfunc='size', fill_value=0)
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(heatmap_data, annot=True, fmt="d", cmap="YlGnBu")
+    plt.title(f'Heatmap of Users per {state_columns[0]} and Actions')
+    plt.xlabel('Action')
+    plt.ylabel(state_columns[0])
+    plt.savefig('users_bs1_action_heatmap.png')
+
+    # Example 3: Pair Plot
+    plt.figure(figsize=(12, 8))
+    sns.pairplot(df, hue='Action', vars=state_columns)
+    plt.savefig('state_action_pair_plot.png')
+
+    # Example 4: Correlation Heatmap
+    plt.figure(figsize=(12, 8))
+    corr_matrix = df[state_columns + ['Action']].corr()
+    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm")
+    plt.title('Correlation Heatmap of Users per BS and Action')
+    plt.savefig('state_action_correlation_heatmap.png')
+
+    # Example 5: Box Plot
+    plt.figure(figsize=(12, 8))
+    df_melted = df.melt(id_vars=['Action'], value_vars=state_columns, var_name='State', value_name='Value')
+    sns.boxplot(x='State', y='Value', hue='Action', data=df_melted)
+    plt.title('Box Plot of Users per BS by Action')
+    plt.savefig('state_action_box_plot.png')
+
+def create_each_power_sinr_datarate_plot(data):   
+    # Initialize lists
+    num_episodes = len(data)
+
+    # Initialize lists
+    episode_numbers = []
+    num_ue_list = []
+    power_list = []
+    sinr_dict = {}
+    data_rate_dict = {}
+
+    # Populate the lists and dictionaries with data
+    for episode_idx, episode in enumerate(data):
+        episode_numbers.append(episode_idx + 1)
+        
+        num_ue = int(episode[0][0][0][0] + episode[0][0][0][1])
+        num_ue_list.append(num_ue)
+        power = episode[0][0][0][-1]  # Last element for power
+        power_list.append(power)
+        
+        for i in range(num_ue):
+            sinr_key = f'UE{i+1} SINR'
+            data_rate_key = f'UE{i+1} Data Rate'
+            
+            if sinr_key not in sinr_dict:
+                sinr_dict[sinr_key] = []
+            if data_rate_key not in data_rate_dict:
+                data_rate_dict[data_rate_key] = []
+            
+            sinr_dict[sinr_key].append(episode[0][0][0][i + 2])
+            data_rate_dict[data_rate_key].append(episode[0][0][0][i + 2 + num_ue])
+
+    # Create DataFrames for plotting
+    power_df = pd.DataFrame({'Episode': episode_numbers, 'Power': power_list})
+    sinr_df = pd.DataFrame(sinr_dict)
+    sinr_df['Episode'] = episode_numbers
+    data_rate_df = pd.DataFrame(data_rate_dict)
+    data_rate_df['Episode'] = episode_numbers
+
+    # Calculate the number of subplots needed
+    num_sinr_plots = len(sinr_dict)
+    num_data_rate_plots = len(data_rate_dict)
+    total_plots = 1 + num_sinr_plots + num_data_rate_plots
+
+    # Create a figure with subplots for power, SINR, and data rate
+    rows = (total_plots + 2) // 3  # Number of rows needed
+    fig, axes = plt.subplots(rows, 3, figsize=(18, 6 * rows))
+
+    # Flatten axes array for easy iteration
+    axes = axes.flatten()
+
+    # Plot power
+    axes[0].set_xlabel('Training Episode')
+    axes[0].set_ylabel('Power')
+    axes[0].set_ylim(0, max(power_list) * 1.1)
+    axes[0].plot(power_df['Episode'], power_df['Power'], color='tab:blue', marker='o', label='Power')
+    axes[0].legend(loc='upper left')
+    axes[0].set_title('Power Over Training Episodes')
+
+    # Plot SINR for each UE
+    for idx, col in enumerate(sinr_df.columns):
+        if col != 'Episode':
+            sinr_ax = axes[idx + 1]
+            sinr_ax.set_xlabel('Training Episode')
+            sinr_ax.set_ylabel('SINR')
+            sinr_ax.set_ylim(0, sinr_df[col].max() * 1.1)
+            sinr_ax.plot(sinr_df['Episode'], sinr_df[col], marker='o', label=col)
+            sinr_ax.legend(loc='upper left')
+            sinr_ax.set_title(f'SINR Over Training Episodes for {col}')
+
+    # Plot data rate for each UE
+    for idx, col in enumerate(data_rate_df.columns):
+        if col != 'Episode':
+            data_rate_ax = axes[num_sinr_plots + idx + 1]
+            data_rate_ax.set_xlabel('Training Episode')
+            data_rate_ax.set_ylabel('Data Rate')
+            data_rate_ax.set_ylim(0, data_rate_df[col].max() * 1.1)
+            data_rate_ax.plot(data_rate_df['Episode'], data_rate_df[col], marker='o', label=col)
+            data_rate_ax.legend(loc='upper left')
+            data_rate_ax.set_title(f'Data Rate Over Training Episodes for {col}')
+
+    # Hide any unused subplots
+    for i in range(num_sinr_plots + num_data_rate_plots + 1, len(axes)):
+        fig.delaxes(axes[i])
+
+    plt.tight_layout()
+    plt.savefig('subplots_power_sinr_datarate.png')
+
+def create_combined_sinr_data_power(data):
+    num_episodes = len(data)
+
+    # Initialize lists
+    episode_numbers = []
+    num_ue_list = []
+    power_list = []
+    sinr_dict = {}
+    data_rate_dict = {}
+
+    # Populate the lists and dictionaries with data
+    for episode_idx, episode in enumerate(data):
+        episode_numbers.append(episode_idx + 1)
+        
+        num_ue = int(episode[0][0][0][0] + episode[0][0][0][1])
+        num_ue_list.append(num_ue)
+        power = episode[0][0][0][-1]  # Last element for power
+        power_list.append(power)
+        
+        for i in range(num_ue):
+            sinr_key = f'UE{i+1} SINR'
+            data_rate_key = f'UE{i+1} Data Rate'
+            
+            if sinr_key not in sinr_dict:
+                sinr_dict[sinr_key] = []
+            if data_rate_key not in data_rate_dict:
+                data_rate_dict[data_rate_key] = []
+            
+            sinr_dict[sinr_key].append(episode[0][0][0][i + 2])
+            data_rate_dict[data_rate_key].append(episode[0][0][0][i + 2 + num_ue])
+
+    # Create DataFrames for plotting
+    power_df = pd.DataFrame({'Episode': episode_numbers, 'Power': power_list})
+    sinr_df = pd.DataFrame(sinr_dict)
+    sinr_df['Episode'] = episode_numbers
+    data_rate_df = pd.DataFrame(data_rate_dict)
+    data_rate_df['Episode'] = episode_numbers
+
+    # Create a figure with subplots for power, combined SINR, and combined data rate
+    fig, axes = plt.subplots(3, 1, figsize=(14, 18))
+
+    # Plot power
+    axes[0].set_xlabel('Training Episode')
+    axes[0].set_ylabel('Power')
+    axes[0].set_ylim(0, max(power_list) * 1.1)
+    axes[0].plot(power_df['Episode'], power_df['Power'], color='tab:blue', marker='o', label='Power')
+    axes[0].legend(loc='upper left')
+    axes[0].set_title('Power Over Training Episodes')
+
+    # Plot combined SINR for all UEs
+    for col in sinr_df.columns:
+        if col != 'Episode':
+            axes[1].plot(sinr_df['Episode'], sinr_df[col], marker='o', label=col)
+    axes[1].set_xlabel('Training Episode')
+    axes[1].set_ylabel('SINR')
+    axes[1].set_ylim(0, max(sinr_df.iloc[:, :-1].max()) * 1.1)  # Adjust y-axis to start from 0
+    axes[1].legend(loc='upper left')
+    axes[1].set_title('SINR Over Training Episodes for All UEs')
+
+    # Plot combined data rate for all UEs
+    for col in data_rate_df.columns:
+        if col != 'Episode':
+            axes[2].plot(data_rate_df['Episode'], data_rate_df[col], marker='o', label=col)
+    axes[2].set_xlabel('Training Episode')
+    axes[2].set_ylabel('Data Rate')
+    axes[2].set_ylim(0, max(data_rate_df.iloc[:, :-1].max()) * 1.1)  # Adjust y-axis to start from 0
+    axes[2].legend(loc='upper left')
+    axes[2].set_title('Data Rate Over Training Episodes for All UEs')
+
+    plt.tight_layout()
+    plt.savefig('combined_subplots_power_sinr_datarate.png')
+
+def test_dqn_agent():
+    env = CarrierEnv()
+    state_flattened_size = env.state.shape[0]
+    l5 = env.action_space.n
+    l1 = env.state.shape[0]
+    l2 = 1500
+    l3 = 700
+    l4 = 200
+
+    model = torch.nn.Sequential(
+            torch.nn.Linear(l1, l2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(l2, l3),
+            torch.nn.ReLU(),
+            torch.nn.Linear(l3, l4),
+            torch.nn.ReLU(),
+            torch.nn.Linear(l4, l5)
+        )
+    print("TESTING AGENT")
     model_test=model
+       
     model_test.load_state_dict(torch.load("dqn.pt"))
-    test_rewards=test_model(model_test,env,state_flattened_size)
-    save_plot_and_csv_test(test_rewards)
+    total_reward_list = []
+    total_test_states_action_list = []
+    for i in range(0,100):
+        test_rewards, test_states_actions=test_model(model_test,env,state_flattened_size)
+        total_reward_list.append(test_rewards)
+        total_test_states_action_list.append(test_states_actions)
+   
+    flattened_data = [list(arr[0]) for arr in total_reward_list]
+    save_plot_and_csv_test(flattened_data)
+    overall_reward_plot(flattened_data)
+    # print(test_states_actions)
+    # exit()
+
+    create_action_line_plot(total_test_states_action_list)
+
+    create_each_power_sinr_datarate_plot(total_test_states_action_list)
+
+    create_combined_sinr_data_power(total_test_states_action_list)
+    
+   
+    # flattened_data.insert(0, list(reward_sum))  # Insert the reward sum at the beginning if needed
+   
+   
+    truth_table_data = [list(arr[0]) for arr in total_test_states_action_list]
+    create_truth_table(truth_table_data,flattened_data)
     
     #***************************PLOT TRAIN AND TEST*******************************************
 """
@@ -246,5 +523,5 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
 """
     
 if __name__ == "__main__":
-    dqn_agent()
+  test_dqn_agent()
     
