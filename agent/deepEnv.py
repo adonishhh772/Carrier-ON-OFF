@@ -82,10 +82,10 @@ class CarrierEnv(Env):
         reward = self.calculate_reward(energy_efficiency)
         done = self.calculate_done()
        
-        if np.all(done):
-            self.plot_max('SINR')
-            self.plot_max('Data')
-            self.plot_max('Power')
+        # if np.all(done):
+        #     self.plot_max('SINR')
+        #     self.plot_max('Data')
+        #     self.plot_max('Power')
         # else:
         #     if count > 300:
         #         done = True
