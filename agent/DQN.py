@@ -5,10 +5,10 @@ import random
 from collections import deque
 import seaborn as sns
 import copy
-from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 from numpy import savetxt
 from deepEnv import CarrierEnv
+import threading
 
 """
 Implementation of DQN for gym environments with discrete action space.
@@ -82,7 +82,7 @@ def overall_reward_plot(data):
     plt.legend()
     plt.savefig('bs_rewards_overall_line_plot.png')
 
-def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_size = 845, epochs = 20000,mem_size = 50000,
+def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_size = 845, epochs = 2500,mem_size = 50000,
     batch_size = 256,sync_freq = 16,l1 = 845, l2 = 1500, l3 = 700,l4 = 200, l5 = 5, env=""):
     """
     :param gamma: reward discount factor
@@ -523,5 +523,8 @@ def test_dqn_agent():
 """
     
 if __name__ == "__main__":
-  test_dqn_agent()
+    test_dqn_agent()
+    # thread = threading.Thread(target=dqn_agent, args=[])
+    # thread.start()
+  
     
