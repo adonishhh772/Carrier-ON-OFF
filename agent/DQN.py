@@ -671,19 +671,19 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
     print("Training completed.")
     
     # Save the model
-    torch.save(model.state_dict(), 'dqn_multithreaded.pt')
+    torch.save(model.state_dict(), 'carrier_on_off_trained.pt')
     
     # Plot and save rewards
     plt.plot(total_reward_list)
     plt.xlabel('Epoch')
     plt.ylabel('Total Reward')
     plt.title('Total Reward over Epochs')
-    plt.savefig('dqn_multithreaded_rewards.png')
+    plt.savefig('training_rewards.png')
     
-    savetxt('dqn_multithreaded_rewards.csv', total_reward_list, delimiter=',')
+    savetxt('training_rewards.csv', total_reward_list, delimiter=',')
     
     # Save thread logs to a CSV file
-    with open('dqn_multithreaded_logs1.csv', 'w', newline='') as csvfile:
+    with open('dqn_multithreaded_logs.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['Thread ID', 'Epoch', 'Step', 'Reward'])  # Write header
         for log in thread_logs:
