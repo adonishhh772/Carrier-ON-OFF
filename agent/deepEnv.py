@@ -407,34 +407,34 @@ class CarrierEnv(Env):
         num_active_users = [np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)]
         num_active_users_flat = np.array(num_active_users).flatten()
 
-        print('Distance between Cell and UE')
-        print(self.distances)
+        # print('Distance between Cell and UE')
+        # print(self.distances)
 
-        print('Num User')
-        print(num_active_users)
+        # print('Num User')
+        # print(num_active_users)
 
         self.g = self.calculate_channel_gain()
 
-        print('Channel Gain')
-        print(self.g)
+        # print('Channel Gain')
+        # print(self.g)
         self.p = self.calculate_transmission_power()
         data_rate,sinr, _ = self.calculate_data_rate()
 
-        print('SINR')
-        print(sinr)
+        # print('SINR')
+        # print(sinr)
 
         data_rate_mb = self.convert_datarate(data_rate)
 
-        print('Data Rate(Mb)')
-        print(data_rate_mb)
+        # print('Data Rate(Mb)')
+        # print(data_rate_mb)
 
         flattened_data = np.concatenate([array.flatten() for array in data_rate_mb])
         data_rate_flattened = flattened_data
         sinr_values = np.concatenate([array.flatten() for array in sinr])
         _, _, total_power = self.calculate_total_power()
 
-        print('Total BS power')
-        print(total_power)
+        # print('Total BS power')
+        # print(total_power)
 
 
 

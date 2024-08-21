@@ -8,6 +8,7 @@ import copy
 from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 from numpy import savetxt
+import csv
 from deepEnv import CarrierEnv
 import threading
 
@@ -89,7 +90,7 @@ def overall_reward_plot(data):
     plt.legend()
     plt.savefig('bs_rewards_overall_line_plot.png')
 
-def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_size = 845, epochs = 2500,mem_size = 50000,
+def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_size = 845, epochs = 5000,mem_size = 50000,
     batch_size = 128,sync_freq = 16,l1 = 845, l2 = 1500, l3 = 700,l4 = 200, l5 = 5, env=""):
     """
     :param gamma: reward discount factor
@@ -528,8 +529,166 @@ def test_dqn_agent():
     # save to csv file
     savetxt('dqn_test.csv', test_rewards, delimiter=',')
 """
+
+# Function for training in each thread
+def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flattened_size, epochs, thread_id, gamma, epsilon, total_reward_list, lock, thread_log):
+    loss_fn = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     
+    n_action = env.action_space.n
+    
+    
+    for i in range(epochs):
+        print(f"Thread {thread_id} - Epoch: {i}")
+        # print(epochs)
+        
+        cnt = 0
+        total_reward = 0
+        _state = env.reset()
+        state1 = torch.flatten(torch.from_numpy(_state.astype(np.float32))).reshape(1, state_flattened_size)
+        done = False
+        
+        while not np.all(done):
+            cnt += 1
+            qval = model(state1)
+            qval_ = qval.data.numpy()
+            
+            if random.random() < epsilon:
+                action_ = np.random.randint(0, n_action)
+            else:
+                action_ = np.argmax(qval_)
+                
+            state, reward, done, _ = env.step(action_)
+            state2 = torch.flatten(torch.from_numpy(state.astype(np.float32))).reshape(1, state_flattened_size)
+            
+            exp = (state1, action_, reward, state2, done)
+            replay.append(exp)
+            state1 = state2
+            
+            if len(replay) > batch_size:
+                minibatch = random.sample(replay, batch_size)
+                state1_batch = torch.cat([s1 for (s1, a, r, s2, d) in minibatch])
+                action_batch = torch.Tensor([a for (s1, a, r, s2, d) in minibatch])
+                reward_batch = torch.Tensor([r for (s1, a, r, s2, d) in minibatch])
+                state2_batch = torch.cat([s2 for (s1, a, r, s2, d) in minibatch])
+                done_batch = torch.Tensor([d for (s1, a, r, s2, d) in minibatch])
+                
+                Q1 = model(state1_batch)
+                with torch.no_grad():
+                    Q2 = model2(state2_batch)
+                    
+                action_batch = action_batch.long().view(-1, 1)
+                
+                X_list = []
+                Y_list = []
+
+                # Process each dimension in reward_batch and done_batch
+                for dim in range(reward_batch.shape[1]):
+                    reward_step = reward_batch[:, dim]
+                    done_step = done_batch[:, dim]
+
+                    # Compute Y for each element in the batch
+                    max_q_value_next = torch.max(Q2, dim=1)[0]
+                    Y = reward_step + gamma * ((1 - done_step) * max_q_value_next)
+
+                    # Gather Q-values for the taken actions
+                    X = Q1.gather(dim=1, index=action_batch).squeeze()
+
+                    # print(f"X shape: {X.shape}")
+                    # print(X)
+                    
+                     # Store X and Y values
+                    X_list.append(X.unsqueeze(dim=1))  # Add an extra dimension for stacking
+                    Y_list.append(Y.unsqueeze(dim=1))  # Add an extra dimension for stacking
+
+                # Stack X and Y values from all dimensions to create the correct shapes
+                X_all = torch.cat(X_list, dim=1)
+                Y_all = torch.cat(Y_list, dim=1)
+
+                # Compute loss and backpropagate
+                loss = loss_fn(X_all, Y_all)
+                loss = loss_fn(X, Y)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                if cnt % sync_freq == 0:
+                    model2.load_state_dict(model.state_dict())
+                    
+            total_reward += reward
+            
+            # Log step details (Thread ID, Epoch, Step, Reward)
+            thread_log.append([thread_id, i, cnt, reward])
+        
+        # Update the shared rewards list safely
+        with lock:
+            total_reward_list.append(total_reward)
+        print(f"Thread {thread_id} - Total reward: {total_reward}")
+
+def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=5000, mem_size=50000,
+                            batch_size=256, sync_freq=16):
+    # Initialize the environment and models
+    env = CarrierEnv()
+    state_flattened_size = env.state.shape[0]
+    action_size = env.action_space.n
+    
+    model = torch.nn.Sequential(
+        torch.nn.Linear(state_flattened_size, 1500),
+        torch.nn.ReLU(),
+        torch.nn.Linear(1500, 700),
+        torch.nn.ReLU(),
+        torch.nn.Linear(700, 200),
+        torch.nn.ReLU(),
+        torch.nn.Linear(200, action_size)
+    )
+    
+    model2 = copy.deepcopy(model)
+    model2.load_state_dict(model.state_dict())
+    
+    replay = deque(maxlen=mem_size)
+    total_reward_list = []
+    lock = threading.Lock()
+    
+    # Create a list to store logs for each thread
+    thread_logs = [[] for _ in range(num_threads)]
+    
+    # Calculate epochs per thread
+    epochs_per_thread = total_epochs // num_threads
+    
+    
+    # Create and start threads
+    threads = []
+    for thread_id in range(num_threads):
+        thread = threading.Thread(target=train_thread, args=(model, model2, env, replay, batch_size, sync_freq, state_flattened_size,
+                                                             epochs_per_thread, thread_id, gamma, epsilon, total_reward_list, lock, thread_logs[thread_id]))
+        threads.append(thread)
+        thread.start()
+    
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
+    
+    print("Training completed.")
+    
+    # Save the model
+    torch.save(model.state_dict(), 'dqn_multithreaded.pt')
+    
+    # Plot and save rewards
+    plt.plot(total_reward_list)
+    plt.xlabel('Epoch')
+    plt.ylabel('Total Reward')
+    plt.title('Total Reward over Epochs')
+    plt.savefig('dqn_multithreaded_rewards.png')
+    
+    savetxt('dqn_multithreaded_rewards.csv', total_reward_list, delimiter=',')
+    
+    # Save thread logs to a CSV file
+    with open('dqn_multithreaded_logs1.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Thread ID', 'Epoch', 'Step', 'Reward'])  # Write header
+        for log in thread_logs:
+            writer.writerows(log)  # Write each thread's log
+
 if __name__ == "__main__":
-    thread = threading.Thread(target=dqn_agent, args=[])
-    thread.start()
-    
+    dqn_agent_multithreaded()
+
