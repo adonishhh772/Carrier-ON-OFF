@@ -472,7 +472,7 @@ def test_dqn_agent():
     print("TESTING AGENT")
     model_test=model
        
-    model_test.load_state_dict(torch.load("dqn.pt"))
+    model_test.load_state_dict(torch.load("dqnLive.pt"))
     total_reward_list = []
     total_test_states_action_list = []
     for i in range(0,100):
@@ -660,5 +660,5 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
             writer.writerows(log)  # Write each thread's log
 
 if __name__ == "__main__":
-    dqn_agent_multithreaded()
+    test_dqn_agent()
 
