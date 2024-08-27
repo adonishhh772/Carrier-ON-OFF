@@ -52,18 +52,20 @@ class CarrierEnvLive(Env):
 
         print('Action')
         print(action)
+        print(self.state)
 
         done = self.check_done_condition(data_rate)
 
+        # Detect if a mistake was made
+        mistake_detected = self.detect_mistake(action, data_rate, reward)
+
         info = {
             'total_power': total_power,
-            'energy_efficiency': energy_efficiency
+            'energy_efficiency': energy_efficiency,
+            'mistake_detected': mistake_detected
         }
-        return self.state, reward, done, info
-        
         # Return step information
-        # return self.state, reward, done, info
-
+        return self.state, reward, done, info
 
     def check_done_condition(self, data_rate):
         """
@@ -188,4 +190,24 @@ class CarrierEnvLive(Env):
         total_power_flattened = total_power.flatten()
         state =  np.concatenate((num_active_users_flat, data_rate_flattened, total_power_flattened))
         return state
+    
+    def detect_mistake(self, action, data_rate, reward):
+        """
+        Detect if the agent has made a mistake based on its action, data rate, or reward.
+        Returns True if a mistake is detected, False otherwise.
+        """
+        # Example 1: Check if the data rate of any BS falls below the minimum threshold
+        for cell_index in range(self.num_sbs):
+            if data_rate[cell_index] < self.config.demand_min:
+                return True  # Mistake detected: data rate constraint violated
+        
+        # Example 2: Check if the reward is below a certain threshold
+        if reward < 0:  # You can set a custom threshold for reward
+            return True  # Mistake detected: reward is too low
+        
+        # Example 3: Check if action was unnecessary (e.g., handover when not needed)
+        if action == 1 and np.all(self.sbs_state == 1):
+            return True  # Mistake detected: handover was unnecessary
+
+        return False
     

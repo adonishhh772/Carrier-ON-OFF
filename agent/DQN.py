@@ -488,9 +488,9 @@ def test_dqn_agent():
 
     create_action_line_plot(total_test_states_action_list)
 
-    create_each_power_sinr_datarate_plot(total_test_states_action_list)
+    # create_each_power_sinr_datarate_plot(total_test_states_action_list)
 
-    create_combined_sinr_data_power(total_test_states_action_list)
+    # create_combined_sinr_data_power(total_test_states_action_list)
     
    
     # flattened_data.insert(0, list(reward_sum))  # Insert the reward sum at the beginning if needed
@@ -506,8 +506,8 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     
     n_action = env.action_space.n
-    
-    
+    action_mask = np.ones(n_action, dtype=bool)
+
     for i in range(epochs):
         print(f"Thread {thread_id} - Epoch: {i}")
         # print(epochs)
@@ -522,15 +522,27 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
             cnt += 1
             qval = model(state1)
             qval_ = qval.data.numpy()
+
+            # Apply action masking: Set Q-values of masked actions to a very low value
+            qval_[~action_mask] = -np.inf  # Masked actions get very low Q-values
             
             if random.random() < epsilon:
-                action_ = np.random.randint(0, n_action)
+                # Select a random action from the allowed actions
+                allowed_actions = np.where(action_mask)[0]
+                action_ = np.random.choice(allowed_actions)
+                # action_ = np.random.randint(0, n_action)
             else:
                 action_ = np.argmax(qval_)
                 
-            state, reward, done, _ = env.step(action_)
+            state, reward, done, info = env.step(action_)
+            mistake_detected = info['mistake_detected']
+
+            if mistake_detected:
+                reward -= 10  # Penalty for mistake
+                # Mask this action to avoid repeating the mistake
+                action_mask[action_] = False  # Disable this action
+
             state2 = torch.flatten(torch.from_numpy(state.astype(np.float32))).reshape(1, state_flattened_size)
-            
             exp = (state1, action_, reward, state2, done)
             replay.append(exp)
             state1 = state2
@@ -594,6 +606,11 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
         with lock:
             total_reward_list.append(total_reward)
         print(f"Thread {thread_id} - Total reward: {total_reward}")
+
+        if mistake_detected:
+            epsilon = min(epsilon + 0.01, 1.0)  # Increase epsilon to encourage exploration
+        else:
+            epsilon = max(epsilon - (1/epochs), 0.01)  
 
 def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=5000, mem_size=50000,
                             batch_size=256, sync_freq=16):
@@ -660,5 +677,5 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
             writer.writerows(log)  # Write each thread's log
 
 if __name__ == "__main__":
-    test_dqn_agent()
+    dqn_agent_multithreaded()
 
