@@ -9,7 +9,7 @@ from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 from numpy import savetxt
 import csv
-from deepEnv import CarrierEnv
+from deepEnvLive import CarrierEnvLive
 import threading
 
 """
@@ -100,7 +100,7 @@ def dqn_agent(gamma = 0.9, epsilon = 0.5, learning_rate = 1e-3,state_flattened_s
     :param env_name: name of the gym environment
     :return: 
     """
-    env= CarrierEnv()
+    env= CarrierEnvLive()
     state_flattened_size = env.state.shape[0]
     l5 = env.action_space.n
     l1 = env.state.shape[0]
@@ -452,7 +452,7 @@ def create_combined_sinr_data_power(data):
     plt.savefig('combined_subplots_power_sinr_datarate.png')
 
 def test_dqn_agent():
-    env = CarrierEnv()
+    env = CarrierEnvLive()
     state_flattened_size = env.state.shape[0]
     l5 = env.action_space.n
     l1 = env.state.shape[0]
@@ -498,37 +498,7 @@ def test_dqn_agent():
    
     truth_table_data = [list(arr[0]) for arr in total_test_states_action_list]
     create_truth_table(truth_table_data,flattened_data)
-    
-    #***************************PLOT TRAIN AND TEST*******************************************
-"""
-    epochs_array=[]
-    rewards_array=[]
-    for epochs_n, epochs_reward in enumerate(total_reward_list):
-        epochs_array.append(epochs_n)
-        rewards_array.append(epochs_reward)
 
-    plt.figure(figsize=(10, 7))
-    plt.plot(epochs_array,rewards_array,linewidth=2.0)
-    plt.xlabel("Epochs", fontsize=22)
-    plt.ylabel("Reward", fontsize=22)
-    plt.savefig('dqn_train.png')
-    # save to csv file
-    savetxt('dqn_train.csv', total_reward_list, delimiter=',')
-    
-    steps_array=[]
-    rewards_array=[]
-    for epochs_n, epochs_reward in enumerate(test_rewards):
-        steps_array.append(epochs_n)
-        rewards_array.append(epochs_reward)
-
-    plt.figure(figsize=(10, 7))
-    plt.plot(steps_array,rewards_array,linewidth=2.0)
-    plt.xlabel("Steps", fontsize=22)
-    plt.ylabel("Reward", fontsize=22)
-    plt.savefig('dqn_test.png')
-    # save to csv file
-    savetxt('dqn_test.csv', test_rewards, delimiter=',')
-"""
 
 # Function for training in each thread
 def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flattened_size, epochs, thread_id, gamma, epsilon, total_reward_list, lock, thread_log):
@@ -628,7 +598,7 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
 def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=5000, mem_size=50000,
                             batch_size=256, sync_freq=16):
     # Initialize the environment and models
-    env = CarrierEnv()
+    env = CarrierEnvLive()
     state_flattened_size = env.state.shape[0]
     action_size = env.action_space.n
     
@@ -671,7 +641,7 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
     print("Training completed.")
     
     # Save the model
-    torch.save(model.state_dict(), 'carrier_on_off_trained.pt')
+    torch.save(model.state_dict(), 'dqnLive.pt')
     
     # Plot and save rewards
     plt.plot(total_reward_list)

@@ -61,10 +61,6 @@ class CarrierEnv(Env):
         self.sbs_state = np.ones(self.num_sbs)
         self.state = self.get_observation_state()
         # print(self.state)
-       
-
-        
-
         
     def step(self, action):
         # Handle action (0: no handover, 1: handover)
