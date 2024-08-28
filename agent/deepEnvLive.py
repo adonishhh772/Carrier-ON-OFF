@@ -202,7 +202,7 @@ class CarrierEnvLive(Env):
                 return True  # Mistake detected: data rate constraint violated
         
         # Example 2: Check if the reward is below a certain threshold
-        if reward < 0:  # You can set a custom threshold for reward
+        if np.any(reward < 0):  # You can set a custom threshold for reward
             return True  # Mistake detected: reward is too low
         
         # Example 3: Check if action was unnecessary (e.g., handover when not needed)

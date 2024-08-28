@@ -522,16 +522,22 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
             cnt += 1
             qval = model(state1)
             qval_ = qval.data.numpy()
+            qval_ = np.squeeze(qval_)
 
             # Apply action masking: Set Q-values of masked actions to a very low value
             qval_[~action_mask] = -np.inf  # Masked actions get very low Q-values
+
+            allowed_actions = np.where(action_mask)[0]
+            
+            if allowed_actions.size == 0:  # If no actions are available
+                action_mask = np.ones(n_action, dtype=bool)  # Reset the mask
+                allowed_actions = np.arange(n_action)
             
             if random.random() < epsilon:
                 # Select a random action from the allowed actions
-                allowed_actions = np.where(action_mask)[0]
                 action_ = np.random.choice(allowed_actions)
-                # action_ = np.random.randint(0, n_action)
             else:
+                # Select the action with the highest Q-value among allowed actions
                 action_ = np.argmax(qval_)
                 
             state, reward, done, info = env.step(action_)
