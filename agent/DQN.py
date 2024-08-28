@@ -522,31 +522,29 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
             cnt += 1
             qval = model(state1)
             qval_ = qval.data.numpy()
-            qval_ = np.squeeze(qval_)
+            # qval_ = np.squeeze(qval_)
 
-            # Apply action masking: Set Q-values of masked actions to a very low value
-            qval_[~action_mask] = -np.inf  # Masked actions get very low Q-values
+            # # Apply action masking: Set Q-values of masked actions to a very low value
+            # qval_[~action_mask] = -np.inf  # Masked actions get very low Q-values
 
-            allowed_actions = np.where(action_mask)[0]
+            # allowed_actions = np.where(action_mask)[0]
             
-            if allowed_actions.size == 0:  # If no actions are available
-                action_mask = np.ones(n_action, dtype=bool)  # Reset the mask
-                allowed_actions = np.arange(n_action)
+            # if allowed_actions.size == 0:  # If no actions are available
+            #     action_mask = np.ones(n_action, dtype=bool)  # Reset the mask
+            #     allowed_actions = np.arange(n_action)
             
-            if random.random() < epsilon:
-                # Select a random action from the allowed actions
-                action_ = np.random.choice(allowed_actions)
+            if (random.random() < epsilon):
+                action_ = np.random.randint(0, n_action -1)
             else:
-                # Select the action with the highest Q-value among allowed actions
                 action_ = np.argmax(qval_)
                 
             state, reward, done, info = env.step(action_)
             mistake_detected = info['mistake_detected']
 
-            if mistake_detected:
-                reward -= 10  # Penalty for mistake
-                # Mask this action to avoid repeating the mistake
-                action_mask[action_] = False  # Disable this action
+            # if mistake_detected:
+            #     # reward -= 10  # Penalty for mistake
+            #     # Mask this action to avoid repeating the mistake
+            #     action_mask[action_] = False  # Disable this action
 
             state2 = torch.flatten(torch.from_numpy(state.astype(np.float32))).reshape(1, state_flattened_size)
             exp = (state1, action_, reward, state2, done)
@@ -618,6 +616,9 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
         else:
             epsilon = max(epsilon - (1/epochs), 0.01)  
 
+        print('Epsilon Exploration increase')
+        print(epsilon)
+
 def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=5000, mem_size=50000,
                             batch_size=256, sync_freq=16):
     # Initialize the environment and models
@@ -664,7 +665,7 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
     print("Training completed.")
     
     # Save the model
-    torch.save(model.state_dict(), 'dqnLive.pt')
+    torch.save(model.state_dict(), 'dqnLivewith5UE.pt')
     
     # Plot and save rewards
     plt.plot(total_reward_list)

@@ -13,6 +13,7 @@ class CarrierEnvLive(Env):
         self.num_sbs = self.config.num_sbs
         self.total_ue = self.config.total_user
         self.max_ue_per_sbs = self.config.max_num_usr
+        self.min_ue_per_sbs = self.config.min_num_usr
         self.min_distance = self.config.min_distance
         self.max_distance = self.config.max_distance
         self.min_avg_datarate = self.config.avg_datarate_min
@@ -57,7 +58,7 @@ class CarrierEnvLive(Env):
         done = self.check_done_condition(data_rate)
 
         # Detect if a mistake was made
-        mistake_detected = self.detect_mistake(action, data_rate, reward)
+        mistake_detected = self.detect_mistake(action, data_rate, reward,self.user_associations,self.max_ue_per_sbs,self.min_ue_per_sbs)
 
         info = {
             'total_power': total_power,
@@ -131,11 +132,11 @@ class CarrierEnvLive(Env):
     def get_unifrom_avg_cell_data_rate(self):
         return np.random.uniform(self.min_avg_datarate, self.max_avg_datarate, self.num_sbs)
     
-    def calculate_energy_efficiency(self):
-        _,_, total_data_rate = self.calculate_data_rate()
-        _,_,total_power = self.calculate_total_power()
-        EE = total_data_rate / total_power
-        return EE
+    # def calculate_energy_efficiency(self):
+    #     _,_, total_data_rate = self.calculate_data_rate()
+    #     _,_,total_power = self.calculate_total_power()
+    #     EE = total_data_rate / total_power
+    #     return EE
     
 
     #check this reward function if it makes sense or is feasible 
@@ -144,6 +145,8 @@ class CarrierEnvLive(Env):
         U = len(self.user_associations)
         C = self.num_sbs
         penalty = EE * ((1/U) * sum(Xj) + (1/C) * sum(Xk))
+        print('Penalty to the AI')
+        print(penalty)
         return EE - penalty
 
     def check_constraints(self):
@@ -191,23 +194,40 @@ class CarrierEnvLive(Env):
         state =  np.concatenate((num_active_users_flat, data_rate_flattened, total_power_flattened))
         return state
     
-    def detect_mistake(self, action, data_rate, reward):
+    def detect_mistake(self, actions, data_rate, reward, user_associations, load_threshold_high, load_threshold_low):
         """
-        Detect if the agent has made a mistake based on its action, data rate, or reward.
+        Detect if the agent has made a mistake based on its action, data rate, reward, and cell load.
         Returns True if a mistake is detected, False otherwise.
         """
-        # Example 1: Check if the data rate of any BS falls below the minimum threshold
+
+        # Initialize mistake flag
+        mistake_detected = False
+
+        # Calculate the load of each cell (number of users associated with each cell)
+        cell_loads = np.zeros(self.num_sbs, dtype=int)
+        for ue_index, cell_index in enumerate(user_associations):
+            cell_loads[cell_index] += 1
+
+        # Iterate over each cell and check for mistakes based on load and action
         for cell_index in range(self.num_sbs):
+            # action = actions[cell_index]  # Action for the current cell
+            
+            # Check data rate condition
             if data_rate[cell_index] < self.config.demand_min:
-                return True  # Mistake detected: data rate constraint violated
-        
+                mistake_detected = True  # Mistake detected: data rate constraint violated
+            
+            # Action validation based on cell load
+            if actions == 1:  # Action to turn off the cell
+                if cell_loads[cell_index] > load_threshold_high:  # Cell load is too high to turn off
+                    mistake_detected = True  # Mistake detected: trying to turn off a heavily loaded cell
+
+            if actions == 0:  # Action to keep the cell on
+                if cell_loads[cell_index] < load_threshold_low:  # Cell load is too low to keep on
+                    mistake_detected = True  # Mistake detected: keeping a lightly loaded cell on
+
         # Example 2: Check if the reward is below a certain threshold
         if np.any(reward < 0):  # You can set a custom threshold for reward
-            return True  # Mistake detected: reward is too low
-        
-        # Example 3: Check if action was unnecessary (e.g., handover when not needed)
-        if action == 1 and np.all(self.sbs_state == 1):
-            return True  # Mistake detected: handover was unnecessary
+            mistake_detected = True  # Mistake detected: reward is too low
 
-        return False
-    
+        return mistake_detected
+
