@@ -619,7 +619,7 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
         print('Epsilon Exploration increase')
         print(epsilon)
 
-def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=5000, mem_size=50000,
+def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flattened_size=845, total_epochs=10000, mem_size=50000,
                             batch_size=256, sync_freq=16):
     # Initialize the environment and models
     env = CarrierEnvLive()
@@ -665,7 +665,7 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
     print("Training completed.")
     
     # Save the model
-    torch.save(model.state_dict(), 'dqnLivewith5UE.pt')
+    torch.save(model.state_dict(), 'dqnLivewith50UE.pt')
     
     # Plot and save rewards
     plt.plot(total_reward_list)
