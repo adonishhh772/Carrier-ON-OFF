@@ -68,7 +68,7 @@ class RANParser(argparse.ArgumentParser):
         self.add_argument('--max_datarate', type=float, default=20, help='the minimum data rate required in mb')
 
         self.add_argument('--avg_datarate_min', type=float, default=200, help='the minimum data rate served from the cell')
-        self.add_argument('--avg_datarate_max', type=float, default=400, help='the maximum data rate served from the cell')
+        self.add_argument('--avg_datarate_max', type=float, default=800, help='the maximum data rate served from the cell')
 
         self.add_argument('--avg_pwr_min', type=float, default=200, help='the minimum average power served from the cell')
         self.add_argument('--avg_pwr_max', type=float, default=400, help='the maximum average power served from the cell')

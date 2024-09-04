@@ -20,7 +20,7 @@ class CarrierEnvLive(Env):
         self.max_avg_datarate = self.config.avg_datarate_max
         self.min_avg_power = self.config.avg_pwr_min
         self.max_avg_power = self.config.avg_pwr_max
-
+        self._max_episode_steps = 500
         # Fixed BS locations
         self.bs_locations = self.generate_bs_locations()
         # Randomly generate user locations within the area
@@ -51,8 +51,8 @@ class CarrierEnvLive(Env):
 
         self.state = self.get_observation_state()
 
-        print('Action')
-        print(action)
+        print('State')
+        # print(data_rate)
         print(self.state)
 
         done = self.check_done_condition(data_rate)
@@ -78,7 +78,7 @@ class CarrierEnvLive(Env):
 
         # Check if any base station's average data rate falls below the minimum threshold
         for cell_index in range(self.num_sbs):
-            if data_rate[cell_index] < self.config.demand_min:
+            if data_rate[cell_index] > self.config.demand_min and data_rate[cell_index] < self.config.demand_max :
                 done_array[cell_index] = True
 
         return done_array

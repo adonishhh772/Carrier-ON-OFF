@@ -472,7 +472,7 @@ def test_dqn_agent():
     print("TESTING AGENT")
     model_test=model
        
-    model_test.load_state_dict(torch.load("dqnLive.pt"))
+    model_test.load_state_dict(torch.load("dqnLivewithnopenalty.pt"))
     total_reward_list = []
     total_test_states_action_list = []
     for i in range(0,100):
@@ -506,7 +506,6 @@ def train_thread(model, model2, env, replay, batch_size, sync_freq, state_flatte
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     
     n_action = env.action_space.n
-    action_mask = np.ones(n_action, dtype=bool)
 
     for i in range(epochs):
         print(f"Thread {thread_id} - Epoch: {i}")
@@ -684,5 +683,5 @@ def dqn_agent_multithreaded(num_threads=1, gamma=0.9, epsilon=0.5, state_flatten
             writer.writerows(log)  # Write each thread's log
 
 if __name__ == "__main__":
-    dqn_agent_multithreaded()
+    test_dqn_agent()
 
