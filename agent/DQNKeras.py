@@ -168,20 +168,22 @@ class DQNAgent:
                     print("episode: {}/{}, score: {}, e: {:.2}".format(e, self.EPISODES, i, self.epsilon))
                     # if i == 500:
                 self.replay()
-        if e % 100 == 0:
-            print(f"Saving trained model after {e} episodes")
-            self.save(f"carrier-{e}.h5")
+        # if e % 100 == 0:
+        #     print(f"Saving trained model after {e} episodes")
+        #     self.save(f"carrier-{e}.h5")
     
-        # Save the model at the end of training
-        print("Saving final trained model as carrier.h5")
-        total_reward_list.append(total_reward)
-        total_penalty_list.append(total_penalty)
-        all_actions_list.append(all_action)
-        all_states_list.append(all_states)
+            # Save the model at the end of training
+            print("Saving final trained model as carrier.h5")
+            total_reward_list.append(total_reward)
+
+            
+            total_penalty_list.append(total_penalty)
+            all_actions_list.append(all_action)
+            all_states_list.append(all_states)
+            
         # print(total_reward_list)
         # exit()
-
-        self.save_plot_and_csv_train(total_reward_list, total_penalty_list,all_actions_list,all_states_list)
+            self.save_plot_and_csv_train(total_reward_list, total_penalty_list,all_actions_list,all_states_list)
         self.save("carrie-50UE.h5")
         # return
 
@@ -201,7 +203,10 @@ class DQNAgent:
         plt.savefig('dqn_train_penalty.png')
         # save to csv file
 
-        savetxt('dqn_train_penalty.csv', total_rewards, delimiter=',')
+        savetxt('dqn_train_reward.csv', total_rewards, delimiter=',')
+        savetxt('dqn_train_penalty.csv', total_penalty, delimiter=',')
+        savetxt('dqn_train_actions.csv', all_action, delimiter=',')
+        # savetxt('dqn_train_states.csv', all_states, delimiter=',')
 
     def test(self):
         self.load("carrier.h5")
