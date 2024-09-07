@@ -20,6 +20,7 @@ class CarrierEnvLive(Env):
         self.max_avg_datarate = self.config.avg_datarate_max
         self.min_avg_power = self.config.avg_pwr_min
         self.max_avg_power = self.config.avg_pwr_max
+        self.increasing = True
         self._max_episode_steps = 500
         # Fixed BS locations
         self.sbs_state = np.ones(self.num_sbs)  # All SBSs are initially on
@@ -38,15 +39,22 @@ class CarrierEnvLive(Env):
         # print(self.state)
 
 
-    def step(self, action):
+    def step(self, action, current_episode):
         # Turn off the selected SBS
         # self.turn_off_sbs(action)
 
+        print('Action')
+        print(action)
         self.move_users()
-        self.reallocate_users()
+        
 
         # # Dynamically adjust the total number of users (increase or decrease)
         self.adjust_user_count()
+
+        self.reallocate_users()
+        # if current_episode % 1000 == 0:
+        #     self.reset_ue_count(current_episode)
+
 
         # Calculate the data rate and power based on the current load
         data_rate = self.calculate_load_based_data_rate()
@@ -56,7 +64,7 @@ class CarrierEnvLive(Env):
         energy_efficiency = data_rate / total_power
 
         # Calculate reward based on energy efficiency, load, data rate, and power penalties
-        reward = self.calculate_reward(energy_efficiency, data_rate, total_power)
+        reward, penalty = self.calculate_reward(energy_efficiency, data_rate, total_power)
 
         # Update state based on user distribution
         self.state = self.get_observation_state()
@@ -70,17 +78,39 @@ class CarrierEnvLive(Env):
         print('Done')
         print(done)
 
-        print('Action')
-        print(action)
+        
 
         # Info object can contain additional metrics (optional)
         info = {
             'total_power': total_power,
             'energy_efficiency': energy_efficiency,
+            'total_penalty': penalty
         }
 
         return self.state, reward, done, info
     
+
+    def reset_ue_count(self, current_episode):
+        """Reset the number of UEs to the min or max threshold every 1000 episodes."""
+        min_ue_total = 5   # Minimum allowed UEs
+        max_ue_total = 50  # Maximum allowed UEs
+
+        # If the episode count is a multiple of 2000, reset to max UEs
+        if current_episode % 2000 == 0:
+            self.total_ue = max_ue_total
+            self.user_locations = np.random.uniform(0, 100, (self.total_ue, 2))  # Recreate user locations
+            print(f"Reset UEs to maximum threshold: {self.total_ue} UEs.")
+
+        # If the episode count is a multiple of 1000 but not 2000, reset to min UEs
+        elif current_episode % 1000 == 0:
+            self.total_ue = min_ue_total
+            self.user_locations = np.random.uniform(0, 100, (self.total_ue, 2))  # Recreate user locations
+            print(f"Reset UEs to minimum threshold: {self.total_ue} UEs.")
+
+        # Recalculate user associations after reset
+        self.user_associations = np.zeros(self.total_ue, dtype=int)  # Reset user associations with the new size
+        self.reallocate_users()
+
 
     def move_users(self):
         """Simulate user movement by adding random displacements to user locations."""
@@ -104,6 +134,10 @@ class CarrierEnvLive(Env):
             print("Error: No active SBS to re-associate users.")
             return  # Exit early if no SBSs are active
 
+        print('Total UE')
+        print(self.total_ue)
+        print(len(self.user_associations))
+     
         for i in range(self.total_ue):
             distances = np.linalg.norm(self.user_locations[i] - self.bs_locations[active_sbs], axis=1)
             nearest_active_sbs = active_sbs[np.argmin(distances)]  # Get the nearest active SBS
@@ -111,24 +145,40 @@ class CarrierEnvLive(Env):
 
 
     def adjust_user_count(self):
-        """Increase or decrease the number of users dynamically, with bounds on the total UE count."""
-        # Define minimum and maximum UE limits
-        min_ue_total = self.min_ue_per_sbs   # Minimum allowed UEs
-        max_ue_total = 100  # Maximum allowed UEs
+        """Increase or decrease the number of users dynamically based on max and min UE thresholds."""
         
-        if np.random.random() < 0.5:  # Randomly decide to add or remove users
-            users_to_add = np.random.randint(1, 5)
-            if self.total_ue + users_to_add <= max_ue_total:  # Ensure we don't exceed the max UE limit
+        # Define minimum and maximum UE limits
+        min_ue_total = 8   # Minimum allowed UEs
+        max_ue_total = 50  # Maximum allowed UEs
+        
+        # Check if we are increasing or decreasing UEs
+        if self.increasing:
+            # Increase UE count until we reach the max threshold
+            users_to_add = np.random.randint(1, 5)  # Randomly add 1-5 UEs
+            if self.total_ue + users_to_add <= max_ue_total:
                 self.add_users(users_to_add)
+                print(f"Added {users_to_add} users. Total UEs: {self.total_ue}")
             else:
-                print(f"Cannot add {users_to_add} users. Max UE limit reached.")
+                # If we hit the max, stop increasing and start decreasing
+                self.total_ue = max_ue_total
+                self.increasing = False
+                print(f"Reached max UE threshold: {self.total_ue} UEs. Switching to decrease mode.")
+                self.user_associations = np.zeros(self.total_ue, dtype=int)
+        
         else:
-            users_to_remove = np.random.randint(1, 5)
-            if self.total_ue - users_to_remove >= min_ue_total:  # Ensure we don't go below the min UE limit
+            # Decrease UE count until we reach the min threshold
+            users_to_remove = np.random.randint(1, 5)  # Randomly remove 1-5 UEs
+            if self.total_ue - users_to_remove >= min_ue_total:
                 self.remove_users(users_to_remove)
+                print(f"Removed {users_to_remove} users. Total UEs: {self.total_ue}")
             else:
-                print(f"Cannot remove {users_to_remove} users. Min UE limit reached.")
+                # If we hit the min, stop decreasing and start increasing
+                self.total_ue = min_ue_total
+                self.increasing = True
+                print(f"Reached min UE threshold: {self.total_ue} UEs. Switching to increase mode.")
+                self.user_associations = np.zeros(self.total_ue, dtype=int)
 
+        # self.user_associations = np.zeros(self.total_ue, dtype=int)
 
     def add_users(self, num_users):
         """Add new users randomly into the environment and associate them with the nearest SBS."""
@@ -245,7 +295,7 @@ class CarrierEnvLive(Env):
         # Reward is based on energy efficiency minus the penalties
         reward = energy_efficiency - total_penalty
 
-        return reward
+        return reward, total_penalty
     
 
     def get_observation_state(self):
@@ -260,18 +310,30 @@ class CarrierEnvLive(Env):
         return state
 
     def check_done_condition(self, data_rate):
-        """
-        Check if any of the SBSs meet a termination condition (e.g., data rate too low).
-        """
-        done = np.all(data_rate > self.min_avg_datarate)
-        return done
+        """Check if the episode should end based solely on average throughput (data rate)."""
+        
+        # Calculate the average throughput across all SBSs
+        avg_throughput = np.mean(data_rate)
+        print(avg_throughput)
+        
+        # Done condition: If the average throughput is too low or too high
+        if avg_throughput < self.config.demand_min:
+            print(f"Done: Average throughput is too low: {avg_throughput}")
+            return True
+        elif avg_throughput > self.config.demand_max:
+            print(f"Done: Average throughput is too high: {avg_throughput}")
+            return True
+
+        # Otherwise, the episode is not done
+        return False
+
 
     def reset(self):
         """
         Reset the environment for a new episode.
         """
         self.user_locations = self.generate_user_locations()
-
+        self.increasing = True
         # Calculate distances and associate users with the nearest cell
         self.distances, self.user_associations = self.calculate_distances_and_associations()
         self.state = self.get_observation_state()

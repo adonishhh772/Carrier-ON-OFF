@@ -10,6 +10,9 @@ from collections import deque
 from keras.models import Model, load_model
 from keras.layers import Input, Dense
 from keras.optimizers import Adam, RMSprop
+from matplotlib import pyplot as plt
+from numpy import savetxt
+import csv
 from deepEnvLive import CarrierEnvLive
 
 
@@ -42,7 +45,7 @@ class DQNAgent:
         self.state_size = self.env.state.shape[0]
         print(self.state_size)
         self.action_size = self.env.action_space.n
-        self.EPISODES = 1000
+        self.EPISODES = 10
         self.memory = deque(maxlen=2000)
         
         self.gamma = 0.95    # discount rate
@@ -130,7 +133,15 @@ class DQNAgent:
         self.model.save(name)
             
     def run(self):
+        total_reward_list = []
+        total_penalty_list =[]
+        all_actions_list = []
+        all_states_list = []
         for e in range(self.EPISODES):
+            total_reward = 0
+            total_penalty = 0
+            all_action = 0
+            all_states = 0
             state = self.env.reset()
             state = np.reshape(state, [1, self.state_size])
             done = False
@@ -138,12 +149,18 @@ class DQNAgent:
             while not np.all(done):
                 # self.env.render()
                 action = self.act(state)
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, done, info = self.env.step(action,e)
+                penalty = info['total_penalty']
                 next_state = np.reshape(next_state, [1, self.state_size])
-                if not np.all(done) or i == self.env._max_episode_steps-1:
-                    reward = reward
-                else:
-                    reward = -100
+                # if not np.all(done) or i == self.env._max_episode_steps-1:
+                #     reward = reward
+                # else:
+                #     reward = -100
+                
+                total_reward += reward
+                all_action += action
+                all_states += state
+                total_penalty +=penalty
                 self.remember(state, action, reward, next_state, done)
                 state = next_state
                 i += 1
@@ -153,12 +170,38 @@ class DQNAgent:
                 self.replay()
         if e % 100 == 0:
             print(f"Saving trained model after {e} episodes")
-            self.save(f"cartpole-dqn-{e}.h5")
+            self.save(f"carrier-{e}.h5")
     
         # Save the model at the end of training
-        print("Saving final trained model as cartpole-dqn.h5")
-        self.save("carrier.h5")
+        print("Saving final trained model as carrier.h5")
+        total_reward_list.append(total_reward)
+        total_penalty_list.append(total_penalty)
+        all_actions_list.append(all_action)
+        all_states_list.append(all_states)
+        # print(total_reward_list)
+        # exit()
+
+        self.save_plot_and_csv_train(total_reward_list, total_penalty_list,all_actions_list,all_states_list)
+        self.save("carrie-50UE.h5")
         # return
+
+    def save_plot_and_csv_train(self,total_rewards, total_penalty, all_action, all_states):
+        x = np.arange(len(total_rewards))
+        y = total_rewards
+        plt.xlabel("Epochs", fontsize=22)
+        plt.ylabel("Reward", fontsize=22)
+        plt.plot(x, y, c='black')
+        plt.savefig('dqn_train_rewards.png')
+
+        x = np.arange(len(total_penalty))
+        y = total_penalty
+        plt.xlabel("Epochs", fontsize=22)
+        plt.ylabel("Penalty", fontsize=22)
+        plt.plot(x, y, c='black')
+        plt.savefig('dqn_train_penalty.png')
+        # save to csv file
+
+        savetxt('dqn_train_penalty.csv', total_rewards, delimiter=',')
 
     def test(self):
         self.load("carrier.h5")
@@ -170,7 +213,7 @@ class DQNAgent:
             while not np.all(done):
                 # self.env.render()
                 action = np.argmax(self.model.predict(state))
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, done, _ = self.env.step(action,e)
                 state = np.reshape(next_state, [1, self.state_size])
                 i += 1
                 if np.all(done):
@@ -179,5 +222,5 @@ class DQNAgent:
 
 if __name__ == "__main__":
     agent = DQNAgent()
-    # agent.run()
-    agent.test()
+    agent.run()
+    # agent.test()
