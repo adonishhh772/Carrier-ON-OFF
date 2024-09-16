@@ -42,7 +42,10 @@ class CarrierEnvLive(Env):
     def step(self, action, current_episode):
         # Turn off the selected SBS
         # self.turn_off_sbs(action)
-
+        if self.sbs_state[action] == 1:
+            self.turn_off_sbs(action)  # If the SBS is on, turn it off
+        else:
+            self.turn_on_sbs(action)
         print('Action')
         print(action)
         self.move_users()
@@ -279,7 +282,11 @@ class CarrierEnvLive(Env):
 
             # Penalty if the load exceeds the max limit per SBS
             if load > self.max_ue_per_sbs:
-                load_penalty += (load - self.max_ue_per_sbs) * 1.0  # Penalty for overloading SBS
+                load_penalty += (load - self.max_ue_per_sbs) * 2.0  # Penalty for overloading SBS
+            else:
+                # Reward if turning on SBS helped reduce load
+                if self.sbs_state[sbs_index] == 1 and load < self.max_ue_per_sbs:
+                    reward += 10
             
             # Penalty if the data rate falls below the minimum threshold
             if data_rate[sbs_index] < self.min_avg_datarate:
@@ -305,8 +312,9 @@ class CarrierEnvLive(Env):
         """
         num_active_users = [np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)]
         data_rate = self.calculate_load_based_data_rate()
+        sbs_status = self.sbs_state
         total_power = self.calculate_load_based_power()
-        state = np.concatenate((num_active_users, data_rate, total_power))
+        state = np.concatenate((num_active_users, sbs_status, data_rate, total_power))
         return state
 
     def check_done_condition(self, data_rate):
@@ -356,6 +364,19 @@ class CarrierEnvLive(Env):
             print(f"Cannot turn off SBS {sbs_index}, as it is the last active SBS.")
 
 
+    def turn_on_sbs(self, sbs_index):
+        """Turn on a specified SBS and potentially reassign users."""
+        if self.sbs_state[sbs_index] == 0:  # Only turn on if it's currently off
+            self.sbs_state[sbs_index] = 1  # Turn on the SBS
+            
+            # Optionally reassign users to the newly turned-on SBS based on proximity
+            for user in range(self.total_ue):
+                distance_to_new_sbs = np.linalg.norm(self.user_locations[user] - self.bs_locations[sbs_index])
+                current_sbs = self.user_associations[user]
+                distance_to_current_sbs = np.linalg.norm(self.user_locations[user] - self.bs_locations[current_sbs])
+                
+                if distance_to_new_sbs < distance_to_current_sbs:
+                    self.user_associations[user] = sbs_index  # Reassign user to the new SBS
 
     # def check_done_condition(self, data_rate):
     #     """
