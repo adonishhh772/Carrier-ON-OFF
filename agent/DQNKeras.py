@@ -1,7 +1,6 @@
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import random
-import gym
 import numpy as np
 from collections import deque
 from keras.models import Model, load_model
@@ -29,7 +28,7 @@ class DQNAgent:
         self.env = CarrierEnvLive()
         self.state_size = self.env.state.shape[0]
         self.action_size = self.env.action_space.n
-        self.EPISODES = 10000
+        self.EPISODES = 10
         self.memory = deque(maxlen=2000)
         self.energy_efficiency_list = []
         self.reward_list = []
@@ -43,11 +42,19 @@ class DQNAgent:
         self.batch_size = 64
         self.train_start = 1000
 
+        self.local_output_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+
         # create main model
         self.model = OurModel(input_shape=(self.state_size,), action_space=self.action_size)
 
         # CSV file setup
-        self.csv_file = "training_log.csv"
+        self.csv_file = os.path.join(self.local_output_file,"training_log.csv")
+        self.model_file = os.path.join(self.local_output_file,"carrier.h5")
+        self.ee_plot = os.path.join(self.local_output_file,"energy_efficiency_plot.png")
+        self.reward_plot = os.path.join(self.local_output_file,"reward_plot.png")
+        self.penalty_plot = os.path.join(self.local_output_file,"penalty_plot.png")
+        self.action_plot = os.path.join(self.local_output_file,"actions_frequency_plot.png")
+
         self.create_csv_log()
 
     def create_csv_log(self):
@@ -162,6 +169,8 @@ class DQNAgent:
             # Save data and update plots after each episode
             self.save_plots()
 
+        self.save(self.model_file)
+
     def save_plots(self):
         """Update and save plots after each episode."""
 
@@ -171,7 +180,7 @@ class DQNAgent:
         plt.xlabel("Episode")
         plt.ylabel("Energy Efficiency")
         plt.grid(True)
-        plt.savefig("energy_efficiency_plot.png")
+        plt.savefig(self.ee_plot)
         plt.close()
 
         # Reward Plot
@@ -180,7 +189,7 @@ class DQNAgent:
         plt.xlabel("Episode")
         plt.ylabel("Total Reward")
         plt.grid(True)
-        plt.savefig("reward_plot.png")
+        plt.savefig(self.reward_plot)
         plt.close()
 
         # Penalty Plot
@@ -189,7 +198,7 @@ class DQNAgent:
         plt.xlabel("Episode")
         plt.ylabel("Total Penalty")
         plt.grid(True)
-        plt.savefig("penalty_plot.png")
+        plt.savefig(self.penalty_plot)
         plt.close()
 
         # Action Frequency Plot
@@ -200,7 +209,7 @@ class DQNAgent:
         plt.ylabel("Frequency")
         plt.title("Action Frequency Across Episodes")
         plt.grid(True)
-        plt.savefig("actions_frequency_plot.png")
+        plt.savefig(self.action_plot)
         plt.close()
 
 
