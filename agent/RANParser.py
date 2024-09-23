@@ -29,11 +29,11 @@ class RANParser(argparse.ArgumentParser):
 
         self.add_argument('--demand_min', type=float, default=250, help='minimal user demand mbps per cell')
         self.add_argument('--demand_max', type=float, default=600, help='maximal user demand mbps per cell')
-        self.add_argument('--max_num_usr', type=int, default=50, help='max number of usr associated per cell')
-        self.add_argument('--min_num_usr', type=int, default=5, help='minimum number of usr associated per cell')
+        self.add_argument('--max_num_usr', type=int, default=20, help='max number of usr associated per cell')
+        self.add_argument('--min_num_usr', type=int, default=15, help='minimum number of usr associated per cell')
 
 
-        self.add_argument('--total_user', type=int,default=8,help="The fixed number of user associated in the whole network")
+        self.add_argument('--total_user', type=int,default=50,help="The fixed number of user associated in the whole network")
         self.add_argument('--min_distance', type=int,default=5,help="Minimum distance for handover intilisation")
         self.add_argument('--max_distance', type=int,default=30,help="Maximum distance for handover intilisation")
         # self.add_argument('--distance',type=float,default=23.6,help='distance between UE i and SBS c at time t')

@@ -34,7 +34,7 @@ class CarrierEnvLive(Env):
         # Calculate distances and associate users with the nearest BS
         self.distances, self.user_associations = self.calculate_distances_and_associations()
         # Set up action and observation space
-        self.action_space = Discrete(self.num_sbs)  # Each action represents turning off one SBS
+        self.action_space = Discrete(self.num_sbs * 3)  # Each action represents turning off one SBS
         self.state = self.get_observation_state()
         # print(self.state)
 
@@ -42,19 +42,25 @@ class CarrierEnvLive(Env):
     def step(self, action, current_episode):
         # Turn off the selected SBS
         # self.turn_off_sbs(action)
-        if self.sbs_state[action] == 1:
-            self.turn_off_sbs(action)  # If the SBS is on, turn it off
-        else:
-            self.turn_on_sbs(action)
+        sbs_index = action // 3  # Get SBS index
+        sbs_action = action % 3  # Get action type (0 = off, 1 = on, 2 = do nothing)
+
+        if sbs_action == 0 and self.sbs_state[sbs_index] == 1:
+            # Turn off the SBS
+            self.turn_off_sbs(sbs_index)
+        elif sbs_action == 1 and self.sbs_state[sbs_index] == 0:
+            # Turn on the SBS
+            self.turn_on_sbs(sbs_index)
+
         print('Action')
         print(action)
         self.move_users()
-        
+            
 
         # # Dynamically adjust the total number of users (increase or decrease)
         self.adjust_user_count()
 
-        self.reallocate_users()
+        # self.reallocate_users()
         # if current_episode % 1000 == 0:
         #     self.reset_ue_count(current_episode)
 
@@ -64,7 +70,7 @@ class CarrierEnvLive(Env):
         total_power = self.calculate_load_based_power()
 
         # Calculate energy efficiency
-        energy_efficiency = data_rate / total_power
+        energy_efficiency = np.sum(data_rate) / np.sum(total_power) if np.sum(total_power) > 0 else 0
 
         # Calculate reward based on energy efficiency, load, data rate, and power penalties
         reward, penalty = self.calculate_reward(energy_efficiency, data_rate, total_power)
@@ -95,8 +101,8 @@ class CarrierEnvLive(Env):
 
     def reset_ue_count(self, current_episode):
         """Reset the number of UEs to the min or max threshold every 1000 episodes."""
-        min_ue_total = 5   # Minimum allowed UEs
-        max_ue_total = 50  # Maximum allowed UEs
+        min_ue_total = 2   # Minimum allowed UEs
+        max_ue_total = 40  # Maximum allowed UEs
 
         # If the episode count is a multiple of 2000, reset to max UEs
         if current_episode % 2000 == 0:
@@ -129,30 +135,33 @@ class CarrierEnvLive(Env):
         self.reallocate_users()
 
 
-
     def reallocate_users(self):
         """Reassociate users to the nearest active SBS after they move."""
         active_sbs = np.where(self.sbs_state == 1)[0]  # Get indices of active SBSs
         if len(active_sbs) == 0:
             print("Error: No active SBS to re-associate users.")
             return  # Exit early if no SBSs are active
+        
+        if self.total_ue != len(self.user_associations):
+            self.total_ue = len(self.user_associations)
 
-        print('Total UE')
-        print(self.total_ue)
-        print(len(self.user_associations))
-     
+        # Reassociate each user to the nearest active SBS
         for i in range(self.total_ue):
+            # Find the distance to the active SBSs
             distances = np.linalg.norm(self.user_locations[i] - self.bs_locations[active_sbs], axis=1)
-            nearest_active_sbs = active_sbs[np.argmin(distances)]  # Get the nearest active SBS
+            # Get the nearest active SBS
+            nearest_active_sbs = active_sbs[np.argmin(distances)]
+            # Associate the user with the nearest active SBS
             self.user_associations[i] = nearest_active_sbs
+
 
 
     def adjust_user_count(self):
         """Increase or decrease the number of users dynamically based on max and min UE thresholds."""
         
         # Define minimum and maximum UE limits
-        min_ue_total = 8   # Minimum allowed UEs
-        max_ue_total = 50  # Maximum allowed UEs
+        min_ue_total = 2   # Minimum allowed UEs
+        max_ue_total = 40  # Maximum allowed UEs
         
         # Check if we are increasing or decreasing UEs
         if self.increasing:
@@ -166,7 +175,7 @@ class CarrierEnvLive(Env):
                 self.total_ue = max_ue_total
                 self.increasing = False
                 print(f"Reached max UE threshold: {self.total_ue} UEs. Switching to decrease mode.")
-                self.user_associations = np.zeros(self.total_ue, dtype=int)
+                # self.user_associations = np.zeros(self.total_ue, dtype=int)
         
         else:
             # Decrease UE count until we reach the min threshold
@@ -179,7 +188,7 @@ class CarrierEnvLive(Env):
                 self.total_ue = min_ue_total
                 self.increasing = True
                 print(f"Reached min UE threshold: {self.total_ue} UEs. Switching to increase mode.")
-                self.user_associations = np.zeros(self.total_ue, dtype=int)
+                # self.user_associations = np.zeros(self.total_ue, dtype=int)
 
         # self.user_associations = np.zeros(self.total_ue, dtype=int)
 
@@ -267,41 +276,86 @@ class CarrierEnvLive(Env):
                 power_consumption[sbs_index] = 0  # If no users, power is 0 (SBS turned off)
         return power_consumption
     
+    # def calculate_reward(self, energy_efficiency, data_rate, total_power):
+    #     """
+    #     Calculate reward based on energy efficiency and apply penalties based on load, data rate, and power.
+    #     The higher the load, the larger the penalty; the lower the data rate, the larger the penalty; 
+    #     inefficient power usage also leads to penalties.
+    #     """
+    #     load_penalty = 0
+    #     data_rate_penalty = 0
+    #     power_penalty = 0
+    #     load_reward = 0
+
+    #     for sbs_index in range(self.num_sbs):
+    #         load = np.sum(self.user_associations == sbs_index)
+
+    #         # Penalty if the load exceeds the max limit per SBS
+    #         if load > self.max_ue_per_sbs:
+    #             load_penalty += (load - self.max_ue_per_sbs) * 2.0  # Penalty for overloading SBS
+    #         else:
+    #             # Reward if turning on SBS helped reduce load
+    #             if self.sbs_state[sbs_index] == 1 and load < self.max_ue_per_sbs:
+    #                 load_reward += 10
+            
+    #         # Penalty if the data rate falls below the minimum threshold
+    #         if data_rate[sbs_index] < self.min_avg_datarate:
+    #             data_rate_penalty += (self.min_avg_datarate - data_rate[sbs_index]) * 2.0  # More severe penalty for data rate issues
+
+    #         # Penalty if power consumption is inefficient (too high for the data rate)
+    #         if total_power[sbs_index] > self.max_avg_power:
+    #             power_penalty += (total_power[sbs_index] - self.max_avg_power) * 0.5  # Penalty for power overuse
+
+    #     # Total penalty is a combination of load, data rate, and power penalties
+    #     total_penalty = load_penalty + data_rate_penalty + power_penalty
+        
+    #     # Reward is based on energy efficiency minus the penalties
+    #     reward = energy_efficiency - total_penalty + load_reward
+
+    #     return reward, total_penalty
+    
     def calculate_reward(self, energy_efficiency, data_rate, total_power):
         """
-        Calculate reward based on energy efficiency and apply penalties based on load, data rate, and power.
-        The higher the load, the larger the penalty; the lower the data rate, the larger the penalty; 
-        inefficient power usage also leads to penalties.
+        Calculate reward and penalties based on SBS load and energy efficiency.
         """
         load_penalty = 0
         data_rate_penalty = 0
         power_penalty = 0
+        load_reward = 0
+        sbs_on_off_penalty = 0
+
+        total_active_users = np.sum([np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)])
 
         for sbs_index in range(self.num_sbs):
             load = np.sum(self.user_associations == sbs_index)
 
-            # Penalty if the load exceeds the max limit per SBS
+            # Penalty if load exceeds max UEs (20 UEs max)
             if load > self.max_ue_per_sbs:
                 load_penalty += (load - self.max_ue_per_sbs) * 2.0  # Penalty for overloading SBS
             else:
-                # Reward if turning on SBS helped reduce load
                 if self.sbs_state[sbs_index] == 1 and load < self.max_ue_per_sbs:
-                    reward += 10
-            
-            # Penalty if the data rate falls below the minimum threshold
-            if data_rate[sbs_index] < self.min_avg_datarate:
-                data_rate_penalty += (self.min_avg_datarate - data_rate[sbs_index]) * 2.0  # More severe penalty for data rate issues
+                    load_reward += 10
 
-            # Penalty if power consumption is inefficient (too high for the data rate)
-            if total_power[sbs_index] > self.max_avg_power:
-                power_penalty += (total_power[sbs_index] - self.max_avg_power) * 0.5  # Penalty for power overuse
+            # Penalty for keeping SBS on with fewer than 5 UEs
+            if self.sbs_state[sbs_index] == 1 and load < self.min_ue_per_sbs:
+                sbs_on_off_penalty += (self.min_ue_per_sbs - load) * 1.5
 
-        # Total penalty is a combination of load, data rate, and power penalties
-        total_penalty = load_penalty + data_rate_penalty + power_penalty
-        
-        # Reward is based on energy efficiency minus the penalties
-        reward = energy_efficiency - total_penalty
+            # **Update**: Penalty for turning off SBS when there are more than 20 UEs
+            if self.sbs_state[sbs_index] == 0 and load > self.max_ue_per_sbs:
+                sbs_on_off_penalty += (load - self.max_ue_per_sbs) * 2.0
 
+        # Scenario: Turn off SBS if total UEs < 20, turn on SBS if total UEs ≥ 20
+        if total_active_users < 20:
+            for sbs_index in range(self.num_sbs):
+                if self.sbs_state[sbs_index] == 1:
+                    sbs_on_off_penalty += 5  # Penalty for keeping unnecessary SBS on
+
+        if total_active_users >= 20:
+            if np.sum(self.sbs_state) < 2:
+                sbs_on_off_penalty += 10  # Penalty for not turning on enough SBSs
+
+        total_penalty = load_penalty + data_rate_penalty + power_penalty + sbs_on_off_penalty
+        reward = energy_efficiency - total_penalty + load_reward
         return reward, total_penalty
     
 
@@ -310,10 +364,22 @@ class CarrierEnvLive(Env):
         Get the current state based on the number of users per SBS,
         the data rate, and the power consumption.
         """
-        num_active_users = [np.sum(self.user_associations == cell_index) for cell_index in range(self.num_sbs)]
-        data_rate = self.calculate_load_based_data_rate()
+        num_active_users = [
+        np.sum(self.user_associations == cell_index) if self.sbs_state[cell_index] == 1 else 0
+        for cell_index in range(self.num_sbs)
+        ]   
+        data_rate = [
+        self.calculate_load_based_data_rate()[cell_index] if self.sbs_state[cell_index] == 1 else 0
+        for cell_index in range(self.num_sbs)
+        ]
+
+        # Calculate the power consumption for each SBS. If the SBS is off, set the power consumption to 0
+        total_power = [
+            self.calculate_load_based_power()[cell_index] if self.sbs_state[cell_index] == 1 else 0
+            for cell_index in range(self.num_sbs)
+        ]
         sbs_status = self.sbs_state
-        total_power = self.calculate_load_based_power()
+        # total_power = self.calculate_load_based_power()
         state = np.concatenate((num_active_users, sbs_status, data_rate, total_power))
         return state
 
@@ -341,7 +407,7 @@ class CarrierEnvLive(Env):
         Reset the environment for a new episode.
         """
         self.user_locations = self.generate_user_locations()
-        self.increasing = True
+        # self.increasing = True
         # Calculate distances and associate users with the nearest cell
         self.distances, self.user_associations = self.calculate_distances_and_associations()
         self.state = self.get_observation_state()
@@ -352,13 +418,16 @@ class CarrierEnvLive(Env):
         if np.sum(self.sbs_state) > 1:  # Only turn off if more than one SBS is active
             if self.sbs_state[sbs_index] == 1:  # If SBS is on, turn it off
                 self.sbs_state[sbs_index] = 0
-                # Reassign users to other SBSs
+                # Reassign users who were associated with the SBS that is being turned off
                 users_to_reassign = np.where(self.user_associations == sbs_index)[0]
                 for user in users_to_reassign:
+                    # Get active SBSs
                     active_sbs = np.where(self.sbs_state == 1)[0]
                     if len(active_sbs) > 0:
+                        # Find the nearest active SBS for each user
                         distances = np.linalg.norm(self.user_locations[user] - self.bs_locations[active_sbs], axis=1)
                         nearest_active_sbs = active_sbs[np.argmin(distances)]
+                        # Reassign the user to the nearest active SBS
                         self.user_associations[user] = nearest_active_sbs
         else:
             print(f"Cannot turn off SBS {sbs_index}, as it is the last active SBS.")
