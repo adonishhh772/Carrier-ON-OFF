@@ -88,14 +88,8 @@ class CarrierEnvLive(Env):
         # Update state based on user distribution
         self.state = self.get_observation_state()
 
-        print('State')
-        print(self.state)
-
         # Check if the episode is done (based on some condition like data rate thresholds)
         done = self.check_done_condition(data_rate)
-
-        print('Done')
-        print(done)
 
         
 
@@ -464,18 +458,16 @@ class CarrierEnvLive(Env):
         
         # Calculate the average throughput across all SBSs
         avg_throughput = np.mean(data_rate)
-        print(avg_throughput)
-        
-        # Done condition: If the average throughput is too low or too high
-        if avg_throughput < self.config.demand_min:
-            print(f"Done: Average throughput is too low: {avg_throughput}")
-            return True
-        elif avg_throughput > self.config.demand_max:
-            print(f"Done: Average throughput is too high: {avg_throughput}")
+        print(f"Average throughput: {avg_throughput}")
+
+        # Done condition: End episode if throughput falls between min and max demand thresholds
+        if self.config.demand_min <= avg_throughput <= self.config.demand_max:
+            print(f"Done: Average throughput is within the acceptable range: {avg_throughput}")
             return True
 
         # Otherwise, the episode is not done
         return False
+
 
 
     def reset(self):
