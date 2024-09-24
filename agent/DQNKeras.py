@@ -305,7 +305,7 @@ if __name__ == "__main__":
 
     # List of UE counts to train progressively
     ue_counts = [5, 10, 15, 20, 25, 30, 35, 40]
-    episodes_per_ue = 10000
+    episodes_per_ue = 10
 
     # Run progressive training with increasing UEs
     # agent.run_training_with_progressive_ues(ue_counts, episodes_per_ue=10000)
