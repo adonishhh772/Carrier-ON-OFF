@@ -212,13 +212,107 @@ class DQNAgent:
         plt.savefig(self.action_plot)
         plt.close()
 
+    def train(self, start_episodes, num_episodes, ue_count):
+        """
+        Train the agent for a given number of episodes and a given UE count.
+        :param start_episodes: Starting episode number (for logging purposes).
+        :param num_episodes: Number of episodes to train in this phase.
+        :param ue_count: The number of UEs to set in the environment for this training phase.
+        """
+        # Update UE count in the environment
+        self.env.num_ue = ue_count
+        # self.env.reset()
+
+        for e in range(start_episodes, start_episodes + num_episodes):
+            total_reward = 0
+            total_penalty = 0
+            episode_actions = [] 
+            total_energy_efficiency = 0
+            i = 0
+            # Reset environment at the start of each episode
+            state = self.env.reset()
+            state = np.reshape(state, [1, self.state_size])
+            done = False
+            total_reward = 0
+
+            while not done:
+                # Choose action
+                action = self.act(state)
+                next_state, reward, done, info = self.env.step(action, e)
+                next_state = np.reshape(next_state, [1, self.state_size])
+
+                penalty = info['total_penalty']
+                energy_efficiency = info['energy_efficiency']
+                total_energy_efficiency += energy_efficiency
+                total_reward += reward
+                total_penalty += penalty
+
+                # Store the experience in memory
+                self.remember(state, action, reward, next_state, done)
+                self.log_to_csv(e, i, state, action, reward, penalty, energy_efficiency)
+                state = next_state
+
+                i += 1
+
+                if done:
+                    print(f"Episode: {e}/{start_episodes + num_episodes}, Reward: {total_reward}, Epsilon: {self.epsilon:.2}")
+                    break
+
+                # Perform experience replay
+                self.replay()
+
+            avg_energy_efficiency = total_energy_efficiency / (i+1) if i > 0 else 0
+            self.energy_efficiency_list.append(avg_energy_efficiency)
+            self.reward_list.append(total_reward)
+            self.penalty_list.append(total_penalty)
+
+             # Count action frequencies for the episode
+            action_freq = np.bincount(episode_actions, minlength=self.action_size)
+            self.actions_frequency.append(action_freq)
+
+            # Save data and update plots after each episode
+            self.save_plots()
+
+            # # Save model periodically
+            # if e % 1000 == 0:
+            #     self.save(self.model_file)
+            #     print(f"Model saved after episode {e}")
+
+    def run_training_with_progressive_ues(self, ue_counts, episodes_per_ue=10000):
+        """
+        Train the model progressively with increasing UEs.
+        :param ue_counts: List of UE counts (e.g., [5, 10, 15, 20, 25, 30, 35, 40])
+        :param episodes_per_ue: Number of episodes to train per UE configuration.
+        """
+        for i, ue_count in enumerate(ue_counts):
+            print(f"Starting training with {ue_count} UEs.")
+
+            # Load model if not starting from scratch
+            if i > 0:
+                self.load(self.model_file)
+
+            # Train for the specified number of episodes for the current UE count
+            self.train(i * episodes_per_ue, episodes_per_ue, ue_count)
+
+            # Save the model after training with the current UE count
+            self.save(self.model_file)
+            print(f"Model saved after training with {ue_count} UEs.")
+
 
 if __name__ == "__main__":
     agent = DQNAgent()
+    # agent = DQNAgent()
 
-    # Create and start training thread
-    agent_thread = threading.Thread(target=agent.run)
+    # List of UE counts to train progressively
+    ue_counts = [5, 10, 15, 20, 25, 30, 35, 40]
+    episodes_per_ue = 10000
+
+    # Run progressive training with increasing UEs
+    # agent.run_training_with_progressive_ues(ue_counts, episodes_per_ue=10000)
+
+    # # Create and start training thread
+    agent_thread = threading.Thread(target=agent.run_training_with_progressive_ues,args=(ue_counts, episodes_per_ue))
     agent_thread.start()
 
-    # Wait for the training thread to complete
+    # # Wait for the training thread to complete
     agent_thread.join()

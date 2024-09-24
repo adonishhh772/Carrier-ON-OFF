@@ -12,6 +12,7 @@ class CarrierEnvLive(Env):
         #look into the distribution of random arrays
         self.num_sbs = self.config.num_sbs
         self.total_ue = self.config.total_user
+        self.num_ue = self.config.num_usr
         self.max_ue_per_sbs = self.config.max_num_usr
         self.min_ue_per_sbs = self.config.min_num_usr
         self.min_distance = self.config.min_distance
@@ -52,13 +53,13 @@ class CarrierEnvLive(Env):
             # Turn on the SBS
             self.turn_on_sbs(sbs_index)
 
-        print('Action')
-        print(action)
+        # print('Action')
+        # print(action)
         self.move_users()
             
 
         # # Dynamically adjust the total number of users (increase or decrease)
-        self.adjust_user_count()
+        # self.adjust_user_count()
 
         # self.reallocate_users()
         # if current_episode % 1000 == 0:
@@ -142,11 +143,11 @@ class CarrierEnvLive(Env):
             print("Error: No active SBS to re-associate users.")
             return  # Exit early if no SBSs are active
         
-        if self.total_ue != len(self.user_associations):
-            self.total_ue = len(self.user_associations)
+        if self.num_ue != len(self.user_associations):
+            self.num_ue = len(self.user_associations)
 
         # Reassociate each user to the nearest active SBS
-        for i in range(self.total_ue):
+        for i in range(self.num_ue):
             # Find the distance to the active SBSs
             distances = np.linalg.norm(self.user_locations[i] - self.bs_locations[active_sbs], axis=1)
             # Get the nearest active SBS
@@ -439,7 +440,7 @@ class CarrierEnvLive(Env):
             self.sbs_state[sbs_index] = 1  # Turn on the SBS
             
             # Optionally reassign users to the newly turned-on SBS based on proximity
-            for user in range(self.total_ue):
+            for user in range(self.num_ue):
                 distance_to_new_sbs = np.linalg.norm(self.user_locations[user] - self.bs_locations[sbs_index])
                 current_sbs = self.user_associations[user]
                 distance_to_current_sbs = np.linalg.norm(self.user_locations[user] - self.bs_locations[current_sbs])
@@ -476,15 +477,15 @@ class CarrierEnvLive(Env):
     def generate_user_locations(self):
         user_locations = []
         for _ in range(self.num_sbs):
-            cell_user_locations = np.random.uniform(low=self.min_distance, high=self.max_distance, size=(self.total_ue, 2))
+            cell_user_locations = np.random.uniform(low=self.min_distance, high=self.max_distance, size=(self.num_ue, 2))
             user_locations.append(cell_user_locations)
         return np.vstack(user_locations)
     
     def calculate_distances_and_associations(self):
-        distances = np.zeros((self.total_ue, self.num_sbs))
-        user_associations = np.zeros(self.total_ue, dtype=int)
+        distances = np.zeros((self.num_ue, self.num_sbs))
+        user_associations = np.zeros(self.num_ue, dtype=int)
 
-        for ue_index in range(self.total_ue):
+        for ue_index in range(self.num_ue):
             for cell_index in range(self.num_sbs):
                 distances[ue_index, cell_index] = np.linalg.norm(self.user_locations[ue_index] - self.bs_locations[cell_index])
             nearest_cell = np.argmin(distances[ue_index])
