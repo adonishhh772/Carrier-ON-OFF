@@ -128,7 +128,7 @@ class CarrierEnvLive(Env):
     def move_users(self):
         """Simulate user movement by adding random displacements to user locations."""
         num_users = self.user_locations.shape[0]  # Get the current number of users
-        movement_noise = np.random.uniform(-10, 10, (num_users, 2))  # Small movement in a 2D space
+        movement_noise = np.random.uniform(-2, 2, (num_users, 2))  # Small movement in a 2D space
         self.user_locations += movement_noise
 
         # Ensure users stay within the bounded area defined by min_distance and max_distance
@@ -139,25 +139,46 @@ class CarrierEnvLive(Env):
         self.reallocate_users()
 
 
+    # def reallocate_users(self):
+    #     """Reassociate users to the nearest active SBS after they move."""
+    #     active_sbs = np.where(self.sbs_state == 1)[0]  # Get indices of active SBSs
+    #     if len(active_sbs) == 0:
+    #         print("Error: No active SBS to re-associate users.")
+    #         return  # Exit early if no SBSs are active
+        
+    #     if self.num_ue != len(self.user_associations):
+    #         self.num_ue = len(self.user_associations)
+
+    #     # Reassociate each user to the nearest active SBS
+    #     for i in range(self.num_ue):
+    #         # Find the distance to the active SBSs
+    #         distances = np.linalg.norm(self.user_locations[i] - self.bs_locations[active_sbs], axis=1)
+    #         # Get the nearest active SBS
+    #         nearest_active_sbs = active_sbs[np.argmin(distances)]
+    #         # Associate the user with the nearest active SBS
+    #         self.user_associations[i] = nearest_active_sbs
+
     def reallocate_users(self):
         """Reassociate users to the nearest active SBS after they move."""
         active_sbs = np.where(self.sbs_state == 1)[0]  # Get indices of active SBSs
         if len(active_sbs) == 0:
             print("Error: No active SBS to re-associate users.")
             return  # Exit early if no SBSs are active
-        
-        if self.num_ue != len(self.user_associations):
-            self.num_ue = len(self.user_associations)
 
         # Reassociate each user to the nearest active SBS
-        for i in range(self.num_ue):
+        for i in range(len(self.user_associations)):  # Ensure we loop within the bounds of user_associations
             # Find the distance to the active SBSs
             distances = np.linalg.norm(self.user_locations[i] - self.bs_locations[active_sbs], axis=1)
-            # Get the nearest active SBS
-            nearest_active_sbs = active_sbs[np.argmin(distances)]
-            # Associate the user with the nearest active SBS
-            self.user_associations[i] = nearest_active_sbs
-
+            
+            if len(distances) > 0:  # Ensure there are distances to compute
+                nearest_active_sbs = active_sbs[np.argmin(distances)]
+                if nearest_active_sbs < len(self.sbs_state):  # Ensure valid SBS index
+                    # Associate the user with the nearest active SBS
+                    self.user_associations[i] = nearest_active_sbs
+                else:
+                    print(f"Error: Invalid SBS index {nearest_active_sbs} for user {i}.")
+            else:
+                print(f"Error: No valid distances found for user {i}.")
 
 
     def adjust_user_count(self):
@@ -410,7 +431,7 @@ class CarrierEnvLive(Env):
             if self.sbs_state[sbs_index] == 1 and load <= self.max_ue_per_sbs and load >= 5:
                 self.reward_counter[sbs_index] += 1  # Increase reward counter
                 reward_multiplier = self.reward_counter[sbs_index]  # Escalating reward for consecutive good decisions
-                load_reward += reward_multiplier * 5  # Increasing reward for keeping load within limits
+                load_reward += reward_multiplier * 2  # Increasing reward for keeping load within limits
             else:
                 self.reward_counter[sbs_index] = 0  # Reset reward counter if not efficient
 
@@ -483,6 +504,25 @@ class CarrierEnvLive(Env):
         self.reset_penalty_and_reward_counters()
         return self.state
 
+    # def turn_off_sbs(self, sbs_index):
+    #     """Turn off a specified SBS and reassign its users to other active SBSs."""
+    #     if np.sum(self.sbs_state) > 1:  # Only turn off if more than one SBS is active
+    #         if self.sbs_state[sbs_index] == 1:  # If SBS is on, turn it off
+    #             self.sbs_state[sbs_index] = 0
+    #             # Reassign users who were associated with the SBS that is being turned off
+    #             users_to_reassign = np.where(self.user_associations == sbs_index)[0]
+    #             for user in users_to_reassign:
+    #                 # Get active SBSs
+    #                 active_sbs = np.where(self.sbs_state == 1)[0]
+    #                 if len(active_sbs) > 0:
+    #                     # Find the nearest active SBS for each user
+    #                     distances = np.linalg.norm(self.user_locations[user] - self.bs_locations[active_sbs], axis=1)
+    #                     nearest_active_sbs = active_sbs[np.argmin(distances)]
+    #                     # Reassign the user to the nearest active SBS
+    #                     self.user_associations[user] = nearest_active_sbs
+    #     else:
+    #         print(f"Cannot turn off SBS {sbs_index}, as it is the last active SBS.")
+
     def turn_off_sbs(self, sbs_index):
         """Turn off a specified SBS and reassign its users to other active SBSs."""
         if np.sum(self.sbs_state) > 1:  # Only turn off if more than one SBS is active
@@ -499,9 +539,10 @@ class CarrierEnvLive(Env):
                         nearest_active_sbs = active_sbs[np.argmin(distances)]
                         # Reassign the user to the nearest active SBS
                         self.user_associations[user] = nearest_active_sbs
+                    else:
+                        print(f"Error: No active SBS to reassign UE {user}.")
         else:
             print(f"Cannot turn off SBS {sbs_index}, as it is the last active SBS.")
-
 
     def turn_on_sbs(self, sbs_index):
         """Turn on a specified SBS and potentially reassign users."""
