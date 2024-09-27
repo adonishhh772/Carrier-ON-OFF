@@ -27,8 +27,8 @@ class RANParser(argparse.ArgumentParser):
     def __init_ssb(self):
         self.add_argument('--num_rrh', type=int, default=8, help='number of RRH per cell')
 
-        self.add_argument('--demand_min', type=float, default=250, help='minimal user demand mbps per cell')
-        self.add_argument('--demand_max', type=float, default=600, help='maximal user demand mbps per cell')
+        self.add_argument('--demand_min', type=float, default=100, help='minimal user demand mbps per cell')
+        self.add_argument('--demand_max', type=float, default=900, help='maximal user demand mbps per cell')
         self.add_argument('--max_num_usr', type=int, default=20, help='max number of usr associated per cell')
         self.add_argument('--min_num_usr', type=int, default=15, help='minimum number of usr associated per cell')
 
