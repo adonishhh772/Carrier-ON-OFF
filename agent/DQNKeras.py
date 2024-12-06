@@ -50,10 +50,7 @@ class DQNAgent:
         # CSV file setup
         self.csv_file = os.path.join(self.local_output_file,"training_log.csv")
         self.model_file = os.path.join(self.local_output_file,"carrier.h5")
-        self.ee_plot = os.path.join(self.local_output_file,"energy_efficiency_plot.png")
-        self.reward_plot = os.path.join(self.local_output_file,"reward_plot.png")
-        self.penalty_plot = os.path.join(self.local_output_file,"penalty_plot.png")
-        self.action_plot = os.path.join(self.local_output_file,"actions_frequency_plot.png")
+        
 
         self.create_csv_log()
 
@@ -61,13 +58,13 @@ class DQNAgent:
         """Initialize the CSV log with headers."""
         with open(self.csv_file, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Episode", "Step", "State", "Action", "Reward", "Penalty", "Energy Efficiency"])
+            writer.writerow(["Episode", "Step", "State", "Action", "Reward", "Penalty","Penalty Reasons", "Energy Efficiency"])
 
-    def log_to_csv(self, episode, step, state, action, reward, penalty, energy_efficiency):
+    def log_to_csv(self, episode, step, state, action, reward, penalty,reasons, energy_efficiency):
         """Log the episode details to CSV."""
         with open(self.csv_file, mode='a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow([episode, step, state.tolist(), action, reward, penalty, energy_efficiency])
+            writer.writerow([episode, step, state.tolist(), action, reward, penalty,reasons, energy_efficiency])
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
@@ -138,6 +135,7 @@ class DQNAgent:
                 next_state, reward, done, info = self.env.step(action, e)
                 penalty = info['total_penalty']
                 energy_efficiency = info['energy_efficiency']
+                penalty_reason = info['penalty_reasons']
                 total_energy_efficiency += energy_efficiency
                 next_state = np.reshape(next_state, [1, self.state_size])
 
@@ -146,7 +144,7 @@ class DQNAgent:
                 self.remember(state, action, reward, next_state, done)
                 
                 # Log to CSV
-                self.log_to_csv(e, i, state, action, reward, penalty, energy_efficiency)
+                self.log_to_csv(e, i, state, action, reward, penalty,penalty_reason, energy_efficiency)
 
                 state = next_state
                 i += 1
@@ -175,95 +173,99 @@ class DQNAgent:
 
         self.save(self.model_file)
 
-    # def save_plots(self):
-        #     """Update and save plots after each episode."""
+    def save_plots(self, ue_count):
+            """Update and save plots after each episode."""
+            self.ee_plot = os.path.join(self.local_output_file,"energy_efficiency_plot_"+str(ue_count)+".png")
+            self.reward_plot = os.path.join(self.local_output_file,"reward_plot_"+str(ue_count)+".png")
+            self.penalty_plot = os.path.join(self.local_output_file,"penalty_plot_"+str(ue_count)+".png")
+            self.action_plot = os.path.join(self.local_output_file,"actions_frequency_plot_"+str(ue_count)+".png")
 
-        #     # Energy Efficiency Plot
-        #     plt.figure()
-        #     plt.plot(self.energy_efficiency_list, label="Energy Efficiency", color='green')
-        #     plt.xlabel("Episode")
-        #     plt.ylabel("Energy Efficiency")
-        #     plt.grid(True)
-        #     plt.savefig(self.ee_plot)
-        #     plt.close()
+            # Energy Efficiency Plot
+            plt.figure()
+            plt.plot(self.energy_efficiency_list, label="Energy Efficiency", color='green')
+            plt.xlabel("Episode")
+            plt.ylabel("Energy Efficiency")
+            plt.grid(True)
+            plt.savefig(self.ee_plot)
+            plt.close()
 
-        #     # Reward Plot
-        #     plt.figure()
-        #     plt.plot(self.reward_list, label="Total Reward", color='blue')
-        #     plt.xlabel("Episode")
-        #     plt.ylabel("Total Reward")
-        #     plt.grid(True)
-        #     plt.savefig(self.reward_plot)
-        #     plt.close()
+            # Reward Plot
+            plt.figure()
+            plt.plot(self.reward_list, label="Total Reward", color='blue')
+            plt.xlabel("Episode")
+            plt.ylabel("Total Reward")
+            plt.grid(True)
+            plt.savefig(self.reward_plot)
+            plt.close()
 
-        #     # Penalty Plot
-        #     plt.figure()
-        #     plt.plot(self.penalty_list, label="Total Penalty", color='red')
-        #     plt.xlabel("Episode")
-        #     plt.ylabel("Total Penalty")
-        #     plt.grid(True)
-        #     plt.savefig(self.penalty_plot)
-        #     plt.close()
+            # Penalty Plot
+            plt.figure()
+            plt.plot(self.penalty_list, label="Total Penalty", color='red')
+            plt.xlabel("Episode")
+            plt.ylabel("Total Penalty")
+            plt.grid(True)
+            plt.savefig(self.penalty_plot)
+            plt.close()
 
-        #     # Action Frequency Plot
-        #     plt.figure()
-        #     action_freq_sum = np.sum(self.actions_frequency, axis=0)  # Sum action frequencies over episodes
-        #     plt.bar(range(self.action_size), action_freq_sum, color='purple')
-        #     plt.xlabel("Action")
-        #     plt.ylabel("Frequency")
-        #     plt.title("Action Frequency Across Episodes")
-        #     plt.grid(True)
-        #     plt.savefig(self.action_plot)
-        #     plt.close()
+            # Action Frequency Plot
+            plt.figure()
+            action_freq_sum = np.sum(self.actions_frequency, axis=0)  # Sum action frequencies over episodes
+            plt.bar(range(self.action_size), action_freq_sum, color='purple')
+            plt.xlabel("Action")
+            plt.ylabel("Frequency")
+            plt.title("Action Frequency Across Episodes")
+            plt.grid(True)
+            plt.savefig(self.action_plot)
+            plt.close()
 
-    def save_plots(self, start_episode, end_episode):
-        """Update and save plots for only 2500 episodes at a time."""
+    # def save_plots(self, start_episode, end_episode):
+    #     """Update and save plots for only 2500 episodes at a time."""
         
-        # Get the data slice for the 2500 episodes
-        energy_efficiency_slice = self.energy_efficiency_list[start_episode:end_episode]
-        reward_slice = self.reward_list[start_episode:end_episode]
-        penalty_slice = self.penalty_list[start_episode:end_episode]
-        actions_frequency_slice = np.sum(self.actions_frequency[start_episode:end_episode], axis=0)  # Sum action frequencies over these episodes
+    #     # Get the data slice for the 2500 episodes
+    #     energy_efficiency_slice = self.energy_efficiency_list[start_episode:end_episode]
+    #     reward_slice = self.reward_list[start_episode:end_episode]
+    #     penalty_slice = self.penalty_list[start_episode:end_episode]
+    #     actions_frequency_slice = np.sum(self.actions_frequency[start_episode:end_episode], axis=0)  # Sum action frequencies over these episodes
 
-        # Energy Efficiency Plot
-        plt.figure()
-        plt.plot(energy_efficiency_slice, label="Energy Efficiency", color='green')
-        plt.xlabel("Episode")
-        plt.ylabel("Energy Efficiency")
-        plt.title(f"Energy Efficiency (Episodes {start_episode} to {end_episode})")
-        plt.grid(True)
-        plt.savefig(os.path.join(self.local_output_file, f"energy_efficiency_{start_episode}_to_{end_episode}.png"))
-        plt.close()
+    #     # Energy Efficiency Plot
+    #     plt.figure()
+    #     plt.plot(energy_efficiency_slice, label="Energy Efficiency", color='green')
+    #     plt.xlabel("Episode")
+    #     plt.ylabel("Energy Efficiency")
+    #     plt.title(f"Energy Efficiency (Episodes {start_episode} to {end_episode})")
+    #     plt.grid(True)
+    #     plt.savefig(os.path.join(self.local_output_file, f"energy_efficiency_{start_episode}_to_{end_episode}.png"))
+    #     plt.close()
 
-        # Reward Plot
-        plt.figure()
-        plt.plot(reward_slice, label="Total Reward", color='blue')
-        plt.xlabel("Episode")
-        plt.ylabel("Total Reward")
-        plt.title(f"Total Reward (Episodes {start_episode} to {end_episode})")
-        plt.grid(True)
-        plt.savefig(os.path.join(self.local_output_file, f"reward_{start_episode}_to_{end_episode}.png"))
-        plt.close()
+    #     # Reward Plot
+    #     plt.figure()
+    #     plt.plot(reward_slice, label="Total Reward", color='blue')
+    #     plt.xlabel("Episode")
+    #     plt.ylabel("Total Reward")
+    #     plt.title(f"Total Reward (Episodes {start_episode} to {end_episode})")
+    #     plt.grid(True)
+    #     plt.savefig(os.path.join(self.local_output_file, f"reward_{start_episode}_to_{end_episode}.png"))
+    #     plt.close()
 
-        # Penalty Plot
-        plt.figure()
-        plt.plot(penalty_slice, label="Total Penalty", color='red')
-        plt.xlabel("Episode")
-        plt.ylabel("Total Penalty")
-        plt.title(f"Total Penalty (Episodes {start_episode} to {end_episode})")
-        plt.grid(True)
-        plt.savefig(os.path.join(self.local_output_file, f"penalty_{start_episode}_to_{end_episode}.png"))
-        plt.close()
+    #     # Penalty Plot
+    #     plt.figure()
+    #     plt.plot(penalty_slice, label="Total Penalty", color='red')
+    #     plt.xlabel("Episode")
+    #     plt.ylabel("Total Penalty")
+    #     plt.title(f"Total Penalty (Episodes {start_episode} to {end_episode})")
+    #     plt.grid(True)
+    #     plt.savefig(os.path.join(self.local_output_file, f"penalty_{start_episode}_to_{end_episode}.png"))
+    #     plt.close()
 
-        # Action Frequency Plot
-        plt.figure()
-        plt.bar(range(self.action_size), actions_frequency_slice, color='purple')
-        plt.xlabel("Action")
-        plt.ylabel("Frequency")
-        plt.title(f"Action Frequency (Episodes {start_episode} to {end_episode})")
-        plt.grid(True)
-        plt.savefig(os.path.join(self.local_output_file, f"actions_frequency_{start_episode}_to_{end_episode}.png"))
-        plt.close()
+    #     # Action Frequency Plot
+    #     plt.figure()
+    #     plt.bar(range(self.action_size), actions_frequency_slice, color='purple')
+    #     plt.xlabel("Action")
+    #     plt.ylabel("Frequency")
+    #     plt.title(f"Action Frequency (Episodes {start_episode} to {end_episode})")
+    #     plt.grid(True)
+    #     plt.savefig(os.path.join(self.local_output_file, f"actions_frequency_{start_episode}_to_{end_episode}.png"))
+    #     plt.close()
 
     def train(self, start_episodes, num_episodes, ue_count):
         """
@@ -296,14 +298,17 @@ class DQNAgent:
 
                 penalty = info['total_penalty']
                 energy_efficiency = info['energy_efficiency']
+                penalty_reason = info['penalty_reasons']
                 total_energy_efficiency += energy_efficiency
                 total_reward += reward
                 total_penalty += penalty
 
                 # Store the experience in memory
                 self.remember(state, action, reward, next_state, done)
-                self.log_to_csv(e, i, state, action, reward, penalty, energy_efficiency)
+                # self.log_to_csv(e, i, state, action, reward, penalty, energy_efficiency)
                 state = next_state
+                self.log_to_csv(e, i, state, action, reward, penalty,penalty_reason, energy_efficiency)
+                
 
                 i += 1
 
@@ -324,10 +329,10 @@ class DQNAgent:
             self.actions_frequency.append(action_freq)
 
             # Save data and update plots after each episode
-            if (e + 1) % 2500 == 0:
-                start_episode = e - 2499
-                end_episode = e + 1
-                self.save_plots(start_episode, end_episode)
+            # if (e + 1) % 2500 == 0:
+            #     start_episode = e - 2499
+            #     end_episode = e + 1
+            self.save_plots(ue_count)
 
             # # Save model periodically
             # if e % 1000 == 0:
@@ -342,6 +347,7 @@ class DQNAgent:
         """
         for i, ue_count in enumerate(ue_counts):
             print(f"Starting training with {ue_count} UEs.")
+            
             self.epsilon = 1.0
             # Load model if not starting from scratch
             if i > 0:
@@ -361,7 +367,7 @@ if __name__ == "__main__":
 
     # List of UE counts to train progressively
     ue_counts = [5, 10, 15, 20, 25, 30, 35, 40]
-    episodes_per_ue = 10000
+    episodes_per_ue = 10
 
     # Run progressive training with increasing UEs
     # agent.run_training_with_progressive_ues(ue_counts, episodes_per_ue=10000)
